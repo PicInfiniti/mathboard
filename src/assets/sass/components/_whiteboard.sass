@@ -129,7 +129,7 @@ button
 
 .whiteboard-tool-grid
   display: grid
-  grid-template-columns: repeat(4, 1fr)
+  grid-template-columns: repeat(3, 1fr)
   gap: .4rem
 
 .whiteboard-tool
@@ -147,6 +147,15 @@ button
 
   span:first-child
     font-size: 1.05rem
+
+  svg
+    width: 1.05rem
+    height: 1.05rem
+    display: block
+    fill: none
+    stroke: currentColor
+    stroke-width: 2
+    stroke-linecap: round
 
   &:hover
     border-color: rgba(255, 209, 102, .7)
@@ -326,6 +335,41 @@ button
   i
     transform: translateX(.76rem)
 
+.whiteboard-axis-size
+  margin-top: .5rem
+  padding: .45rem .55rem
+  display: grid
+  gap: .35rem
+  border: 1px solid rgba(255, 253, 248, .12)
+  border-radius: .6rem
+  color: rgba(255, 253, 248, .68)
+  font-size: .55rem
+  font-weight: 700
+  letter-spacing: .08em
+  text-transform: uppercase
+
+  &:has(input:disabled)
+    opacity: .38
+
+.whiteboard-axis-size__control
+  display: grid
+  grid-template-columns: minmax(0, 1fr) 1.8rem
+  align-items: center
+  gap: .45rem
+
+  input
+    width: 100%
+    accent-color: var(--green)
+
+  output
+    min-height: 1.7rem
+    display: grid
+    place-items: center
+    border-radius: .45rem
+    background: rgba(255, 253, 248, .08)
+    color: var(--white)
+    font-size: .62rem
+
 .whiteboard-history
   display: grid
   grid-template-columns: repeat(2, 1fr)
@@ -408,7 +452,7 @@ body.has-whiteboard-fullscreen
     left: 50%
     padding: .7rem .85rem
     display: grid
-    grid-template-columns: minmax(210px, 1.2fr) minmax(150px, .8fr) minmax(170px, 1fr)
+    grid-template-columns: minmax(270px, 1.4fr) minmax(150px, .8fr) minmax(170px, 1fr)
     align-items: end
     gap: 1rem
     overflow: visible
@@ -429,6 +473,9 @@ body.has-whiteboard-fullscreen
   .whiteboard-tool
     min-height: 2.65rem
 
+  .whiteboard-tool-grid
+    grid-template-columns: repeat(5, 1fr)
+
   .whiteboard-color
     max-width: 2.25rem
 
@@ -448,6 +495,10 @@ body.has-whiteboard-fullscreen
 .whiteboard-board
   --board-pan-x: 0px
   --board-pan-y: 0px
+  --board-grid-size: 32px
+  --board-grid-half: 16px
+  --board-minor-grid-size: 8px
+  --board-minor-grid-half: 4px
   position: relative
   min-width: 0
   min-height: 620px
@@ -459,8 +510,13 @@ body.has-whiteboard-fullscreen
 
   &.is-grid-square, &.is-grid-coordinate
     background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px)
-    background-size: 32px 32px
-    background-position: calc(50% + 16px + var(--board-pan-x)) calc(50% + 16px + var(--board-pan-y))
+    background-size: var(--board-grid-size) var(--board-grid-size)
+    background-position: calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y))
+
+  &.is-zoomed-precision.is-grid-square, &.is-zoomed-precision.is-grid-coordinate
+    background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(rgba(7, 29, 51, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .035) 1px, transparent 1px)
+    background-size: var(--board-grid-size) var(--board-grid-size), var(--board-grid-size) var(--board-grid-size), var(--board-minor-grid-size) var(--board-minor-grid-size), var(--board-minor-grid-size) var(--board-minor-grid-size)
+    background-position: calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y)), calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y)), calc(50% + var(--board-minor-grid-half) + var(--board-pan-x)) calc(50% + var(--board-minor-grid-half) + var(--board-pan-y)), calc(50% + var(--board-minor-grid-half) + var(--board-pan-x)) calc(50% + var(--board-minor-grid-half) + var(--board-pan-y))
 
   &.is-grid-coordinate::before, &.is-grid-coordinate::after
     content: ''
@@ -505,6 +561,9 @@ body.has-whiteboard-fullscreen
   &.is-panning-active
     cursor: grabbing
 
+  &.is-zooming
+    cursor: zoom-in
+
 .whiteboard-axis-labels
   position: absolute
   z-index: 0
@@ -523,6 +582,67 @@ body.has-whiteboard-fullscreen
   inset: 0
   will-change: transform
 
+.whiteboard-zoom-selection
+  position: absolute
+  z-index: 3
+  display: none
+  border: 2px dashed var(--coral)
+  border-radius: .35rem
+  background: rgba(255, 107, 72, .1)
+  box-shadow: 0 0 0 1px rgba(255, 253, 248, .85)
+  pointer-events: none
+
+  &.is-visible
+    display: block
+
+.whiteboard-zoom-controls
+  position: absolute
+  z-index: 5
+  top: 1rem
+  right: 1rem
+  display: grid
+  grid-template-columns: 2.5rem auto
+  grid-template-rows: repeat(2, 2.5rem)
+  gap: .35rem
+  -webkit-user-select: none
+  user-select: none
+
+  button
+    min-width: 2.5rem
+    min-height: 2.5rem
+    padding: .35rem .55rem
+    border: 1px solid rgba(255, 253, 248, .28)
+    border-radius: .6rem
+    background: var(--ink)
+    color: var(--white)
+    box-shadow: 0 8px 22px rgba(7, 29, 51, .18)
+    font-size: .72rem
+    font-weight: 700
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .35
+
+  #whiteboard-zoom-out, #whiteboard-zoom-in
+    font-size: 1.25rem
+
+  #whiteboard-zoom-out
+    grid-column: 1
+    grid-row: 1
+
+  #whiteboard-zoom-in
+    grid-column: 2
+    grid-row: 2
+    justify-self: end
+
+  #whiteboard-zoom-reset
+    grid-column: 2
+    grid-row: 1
+
 .whiteboard-axis-label
   position: absolute
   padding: .05rem .18rem
@@ -530,7 +650,7 @@ body.has-whiteboard-fullscreen
   background: rgba(255, 253, 248, .78)
   color: rgba(7, 29, 51, .7)
   font-family: Ubuntu, Arial, sans-serif
-  font-size: .55rem
+  font-size: var(--axis-label-size, 9px)
   font-weight: 500
   line-height: 1
   white-space: nowrap
@@ -721,6 +841,10 @@ body.has-whiteboard-fullscreen
     top: .7rem
     font-size: .58rem
 
+  .whiteboard-zoom-controls
+    top: .5rem
+    right: .5rem
+
   .whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
     .whiteboard-toolbar
       width: calc(100% - 5.75rem)
@@ -728,11 +852,14 @@ body.has-whiteboard-fullscreen
       left: calc(50% - 1.7rem)
       padding: .55rem
       display: grid
-      grid-template-columns: minmax(0, 1.15fr) minmax(0, .9fr) minmax(0, 1fr)
+      grid-template-columns: repeat(2, minmax(0, 1fr))
       gap: .45rem
 
+    .whiteboard-tool-group--drawing
+      grid-column: 1 / -1
+
     .whiteboard-tool-grid
-      grid-template-columns: repeat(4, 1fr)
+      grid-template-columns: repeat(5, 1fr)
       gap: .2rem
 
     .whiteboard-tool

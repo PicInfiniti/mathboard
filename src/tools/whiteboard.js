@@ -26,6 +26,7 @@ root.innerHTML = `
             <button class="whiteboard-tool" type="button" data-tool="highlighter" aria-pressed="false"><span aria-hidden="true">▰</span><span>Highlight</span></button>
             <button class="whiteboard-tool" type="button" data-tool="eraser" aria-pressed="false"><span aria-hidden="true">◇</span><span>Eraser</span></button>
             <button class="whiteboard-tool" type="button" data-tool="hand" aria-pressed="false"><span aria-hidden="true">✋</span><span>Move</span></button>
+            <button class="whiteboard-tool" type="button" data-tool="zoom" aria-pressed="false"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="5" /><path d="m14 14 5 5M7.5 10h5" /></svg></span><span>Zoom</span></button>
           </div>
         </fieldset>
 
@@ -63,6 +64,13 @@ root.innerHTML = `
             <span><strong>Axis numbers</strong><small>Label coordinate values</small></span>
             <span class="whiteboard-axis-numbers__switch" aria-hidden="true"><i></i></span>
           </button>
+          <label class="whiteboard-axis-size" for="whiteboard-axis-size">
+            <span>Number size</span>
+            <span class="whiteboard-axis-size__control">
+              <input id="whiteboard-axis-size" type="range" min="8" max="30" value="9" disabled />
+              <output id="whiteboard-axis-size-output" for="whiteboard-axis-size">9</output>
+            </span>
+          </label>
         </fieldset>
 
         <div class="whiteboard-history" aria-label="Board actions">
@@ -72,11 +80,12 @@ root.innerHTML = `
           <button class="whiteboard-action whiteboard-action--clear" id="whiteboard-clear" type="button">Clear board</button>
         </div>
 
-        <p class="whiteboard-help"><strong>Tip:</strong> Pen pressure and a stylus eraser tip are supported. Use Move to pan; arrow keys move the focused canvas and Home recenters it. Press <strong>Ctrl/⌘ + Z</strong> to undo. Your board is saved automatically on this device.</p>
+        <p class="whiteboard-help"><strong>Tip:</strong> Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or select the percentage to reset. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
       </aside>
 
       <section class="whiteboard-board" id="whiteboard-board" aria-label="Drawing area">
         <div class="whiteboard-axis-labels" id="whiteboard-axis-labels" aria-hidden="true"></div>
+        <div class="whiteboard-zoom-selection" id="whiteboard-zoom-selection" aria-hidden="true"></div>
         <canvas
           class="whiteboard-canvas"
           id="whiteboard-canvas"
@@ -86,6 +95,11 @@ root.innerHTML = `
         <span class="whiteboard-eraser-preview" id="whiteboard-eraser-preview" aria-hidden="true"></span>
         <p class="whiteboard-board__hint" aria-hidden="true">Draw anywhere to begin</p>
         <p class="whiteboard-status" id="whiteboard-status" role="status" aria-live="polite"></p>
+        <div class="whiteboard-zoom-controls" aria-label="Zoom controls">
+          <button id="whiteboard-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+          <button id="whiteboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view">100%</button>
+          <button id="whiteboard-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+        </div>
         <button class="whiteboard-panel-toggle" id="whiteboard-panel-toggle" type="button" aria-expanded="true" aria-controls="whiteboard-toolbar" aria-label="Hide settings panel" title="Hide settings">
           <span aria-hidden="true">✎</span>
         </button>
@@ -111,7 +125,13 @@ const sizeInput = document.querySelector("#whiteboard-size");
 const sizeOutput = document.querySelector("#whiteboard-size-output");
 const smoothingButton = document.querySelector("#whiteboard-smoothing");
 const axisNumbersButton = document.querySelector("#whiteboard-axis-numbers");
+const axisSizeInput = document.querySelector("#whiteboard-axis-size");
+const axisSizeOutput = document.querySelector("#whiteboard-axis-size-output");
 const axisLabels = document.querySelector("#whiteboard-axis-labels");
+const zoomSelection = document.querySelector("#whiteboard-zoom-selection");
+const zoomOutButton = document.querySelector("#whiteboard-zoom-out");
+const zoomResetButton = document.querySelector("#whiteboard-zoom-reset");
+const zoomInButton = document.querySelector("#whiteboard-zoom-in");
 const undoButton = document.querySelector("#whiteboard-undo");
 const redoButton = document.querySelector("#whiteboard-redo");
 const panelToggleButton = document.querySelector("#whiteboard-panel-toggle");
@@ -128,6 +148,8 @@ let state = {
   smooth: true,
   grid: "blank",
   axisNumbers: true,
+  axisFontSize: 9,
+  zoom: 1,
   panX: 0,
   panY: 0,
   strokes: [],
@@ -137,6 +159,7 @@ let activeStroke = null;
 let activePointerId = null;
 let activePointerType = null;
 let activePan = null;
+let activeZoomSelection = null;
 let lastPenInteraction = 0;
 let clearTimer = null;
 let statusTimer = null;
@@ -216,12 +239,14 @@ function loadState() {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (!saved || !Array.isArray(saved.strokes)) return;
     state = {
-      tool: ["pen", "highlighter", "eraser", "hand"].includes(saved.tool) ? saved.tool : state.tool,
+      tool: ["pen", "highlighter", "eraser", "hand", "zoom"].includes(saved.tool) ? saved.tool : state.tool,
       color: typeof saved.color === "string" ? saved.color : state.color,
       size: Number.isFinite(Number(saved.size)) ? Math.min(30, Math.max(1, Number(saved.size))) : state.size,
       smooth: saved.smooth !== false,
       grid: ["blank", "square", "coordinate"].includes(saved.grid) ? saved.grid : state.grid,
       axisNumbers: saved.axisNumbers !== false,
+      axisFontSize: Number.isFinite(Number(saved.axisFontSize)) ? Math.min(30, Math.max(8, Number(saved.axisFontSize))) : 9,
+      zoom: Number.isFinite(Number(saved.zoom)) ? Math.min(8, Math.max(1, Number(saved.zoom))) : 1,
       panX: Number.isFinite(Number(saved.panX)) ? Number(saved.panX) : 0,
       panY: Number.isFinite(Number(saved.panY)) ? Number(saved.panY) : 0,
       strokes: saved.strokes,
@@ -240,31 +265,58 @@ function syncControls() {
   smoothingButton.setAttribute("aria-pressed", String(state.smooth));
   axisNumbersButton.setAttribute("aria-pressed", String(state.axisNumbers));
   axisNumbersButton.disabled = state.grid !== "coordinate";
+  axisSizeInput.value = state.axisFontSize;
+  axisSizeOutput.value = state.axisFontSize;
+  axisSizeInput.disabled = state.grid !== "coordinate" || !state.axisNumbers;
   canvas.classList.toggle("is-erasing", state.tool === "eraser" || activeStroke?.tool === "eraser");
   canvas.classList.toggle("is-panning", state.tool === "hand");
   canvas.classList.toggle("is-panning-active", Boolean(activePan));
+  canvas.classList.toggle("is-zooming", state.tool === "zoom");
   if (state.tool !== "eraser" && activeStroke?.tool !== "eraser") eraserPreview.classList.remove("is-visible");
   board.style.setProperty("--board-pan-x", `${state.panX}px`);
   board.style.setProperty("--board-pan-y", `${state.panY}px`);
+  board.style.setProperty("--board-grid-size", `${32 * state.zoom}px`);
+  board.style.setProperty("--board-grid-half", `${16 * state.zoom}px`);
+  board.style.setProperty("--board-minor-grid-size", `${8 * state.zoom}px`);
+  board.style.setProperty("--board-minor-grid-half", `${4 * state.zoom}px`);
+  board.style.setProperty("--axis-label-size", `${state.axisFontSize}px`);
   board.classList.toggle("is-grid-square", state.grid === "square");
   board.classList.toggle("is-grid-coordinate", state.grid === "coordinate");
+  board.classList.toggle("is-zoomed-precision", state.zoom >= 1.5);
   syncAxisLabels();
   board.classList.toggle("has-ink", state.strokes.length > 0);
+  zoomOutButton.disabled = state.zoom <= 1;
+  zoomInButton.disabled = state.zoom >= 8;
+  zoomResetButton.textContent = `${Math.round(state.zoom * 100)}%`;
   undoButton.disabled = state.strokes.length === 0;
   redoButton.disabled = redoStack.length === 0;
+}
+
+function coordinateLabelInterval(zoom = state.zoom) {
+  let interval = 2;
+  if (zoom >= 4) interval = 0.25;
+  else if (zoom >= 2.5) interval = 0.5;
+  else if (zoom >= 1.5) interval = 1;
+  while ((32 * zoom * interval) < (state.axisFontSize * 3.2) && interval < 2) interval *= 2;
+  return interval;
+}
+
+function formatCoordinate(value) {
+  const rounded = Math.abs(value) < 0.0001 ? 0 : Number(value.toFixed(2));
+  return String(rounded);
 }
 
 function syncAxisLabels() {
   const bounds = board.getBoundingClientRect();
   const visible = state.grid === "coordinate" && state.axisNumbers;
-  const signature = visible ? `${Math.round(bounds.width)}:${Math.round(bounds.height)}` : "hidden";
+  const signature = visible ? `${Math.round(bounds.width)}:${Math.round(bounds.height)}:${state.zoom.toFixed(3)}:${state.axisFontSize}` : "hidden";
   axisLabels.classList.toggle("is-visible", visible);
   if (signature !== axisLabelSignature) {
     axisLabelSignature = signature;
     axisLabels.replaceChildren();
     if (visible) {
-      const spacing = 32;
-      const labelEvery = 2;
+      const spacing = 32 * state.zoom;
+      const labelEvery = coordinateLabelInterval();
       const step = spacing * labelEvery;
       const centerX = bounds.width / 2;
       const centerY = bounds.height / 2;
@@ -276,7 +328,7 @@ function syncAxisLabels() {
       for (let offset = -xRange; offset <= xRange; offset += 1) {
         const label = document.createElement("span");
         label.className = "whiteboard-axis-label whiteboard-axis-label--x";
-        label.textContent = String(offset * labelEvery);
+        label.textContent = formatCoordinate(offset * labelEvery);
         label.style.left = `${centerX + (offset * step)}px`;
         label.style.top = `${centerY + 7}px`;
         layer.append(label);
@@ -286,7 +338,7 @@ function syncAxisLabels() {
         if (offset === 0) continue;
         const label = document.createElement("span");
         label.className = "whiteboard-axis-label whiteboard-axis-label--y";
-        label.textContent = String(-offset * labelEvery);
+        label.textContent = formatCoordinate(-offset * labelEvery);
         label.style.left = `${centerX + 8}px`;
         label.style.top = `${centerY + (offset * step)}px`;
         layer.append(label);
@@ -302,12 +354,16 @@ function syncAxisLabels() {
 
 function normalizedPoint(event) {
   const bounds = canvas.getBoundingClientRect();
+  const screenX = event.clientX - bounds.left;
+  const screenY = event.clientY - bounds.top;
+  const worldX = (bounds.width / 2) + ((screenX - (bounds.width / 2) - state.panX) / state.zoom);
+  const worldY = (bounds.height / 2) + ((screenY - (bounds.height / 2) - state.panY) / state.zoom);
   const pressure = event.pointerType === "pen"
     ? Math.min(1, Math.max(0.08, event.pressure || 0.5))
     : 0.5;
   return {
-    x: (event.clientX - bounds.left - state.panX) / bounds.width,
-    y: (event.clientY - bounds.top - state.panY) / bounds.height,
+    x: worldX / bounds.width,
+    y: worldY / bounds.height,
     pressure,
   };
 }
@@ -393,8 +449,8 @@ function renderStroke(targetContext, stroke, width, height) {
 
 function renderBoard() {
   const bounds = canvas.getBoundingClientRect();
-  state.panX = clampPan(state.panX, bounds.width);
-  state.panY = clampPan(state.panY, bounds.height);
+  state.panX = clampPan(state.panX, bounds.width * state.zoom);
+  state.panY = clampPan(state.panY, bounds.height * state.zoom);
   const ratio = Math.min(window.devicePixelRatio || 1, 2);
   const pixelWidth = Math.max(1, Math.round(bounds.width * ratio));
   const pixelHeight = Math.max(1, Math.round(bounds.height * ratio));
@@ -407,7 +463,9 @@ function renderBoard() {
   context.imageSmoothingQuality = "high";
   context.clearRect(0, 0, bounds.width, bounds.height);
   context.save();
-  context.translate(state.panX, state.panY);
+  context.translate((bounds.width / 2) + state.panX, (bounds.height / 2) + state.panY);
+  context.scale(state.zoom, state.zoom);
+  context.translate(-(bounds.width / 2), -(bounds.height / 2));
   state.strokes.forEach((stroke) => renderStroke(context, stroke, bounds.width, bounds.height));
   if (activeStroke) renderStroke(context, activeStroke, bounds.width, bounds.height);
   context.restore();
@@ -437,7 +495,7 @@ function updateEraserPreview(event) {
     return;
   }
   const bounds = board.getBoundingClientRect();
-  const diameter = strokeWidth(activeStroke || { tool: "eraser", size: state.size });
+  const diameter = strokeWidth(activeStroke || { tool: "eraser", size: state.size }) * state.zoom;
   eraserPreview.style.setProperty("--eraser-diameter", `${diameter}px`);
   eraserPreview.style.left = `${event.clientX - bounds.left}px`;
   eraserPreview.style.top = `${event.clientY - bounds.top}px`;
@@ -454,19 +512,112 @@ function clampPan(value, limit) {
 
 function moveCanvasBy(deltaX, deltaY) {
   const bounds = canvas.getBoundingClientRect();
-  state.panX = clampPan(state.panX + deltaX, bounds.width);
-  state.panY = clampPan(state.panY + deltaY, bounds.height);
+  state.panX = clampPan(state.panX + deltaX, bounds.width * state.zoom);
+  state.panY = clampPan(state.panY + deltaY, bounds.height * state.zoom);
   saveState();
   renderBoard();
 }
 
+function updateZoomSelection(event) {
+  if (!activeZoomSelection) return;
+  const bounds = canvas.getBoundingClientRect();
+  activeZoomSelection.endX = Math.max(0, Math.min(bounds.width, event.clientX - bounds.left));
+  activeZoomSelection.endY = Math.max(0, Math.min(bounds.height, event.clientY - bounds.top));
+  const left = Math.min(activeZoomSelection.startX, activeZoomSelection.endX);
+  const top = Math.min(activeZoomSelection.startY, activeZoomSelection.endY);
+  const width = Math.abs(activeZoomSelection.endX - activeZoomSelection.startX);
+  const height = Math.abs(activeZoomSelection.endY - activeZoomSelection.startY);
+  zoomSelection.style.left = `${left}px`;
+  zoomSelection.style.top = `${top}px`;
+  zoomSelection.style.width = `${width}px`;
+  zoomSelection.style.height = `${height}px`;
+  zoomSelection.classList.add("is-visible");
+}
+
+function applyZoomSelection(selection) {
+  const bounds = canvas.getBoundingClientRect();
+  const left = Math.min(selection.startX, selection.endX);
+  const top = Math.min(selection.startY, selection.endY);
+  const width = Math.abs(selection.endX - selection.startX);
+  const height = Math.abs(selection.endY - selection.startY);
+  if (width < 24 || height < 24) {
+    announce("Drag a larger rectangle to zoom into an area.");
+    return;
+  }
+
+  const centerX = left + (width / 2);
+  const centerY = top + (height / 2);
+  const worldOffsetX = (centerX - (bounds.width / 2) - state.panX) / state.zoom;
+  const worldOffsetY = (centerY - (bounds.height / 2) - state.panY) / state.zoom;
+  const fitFactor = Math.min(bounds.width / width, bounds.height / height) * 0.9;
+  const nextZoom = Math.min(8, Math.max(state.zoom, state.zoom * fitFactor));
+  state.zoom = nextZoom;
+  state.panX = -worldOffsetX * nextZoom;
+  state.panY = -worldOffsetY * nextZoom;
+  axisLabelSignature = "";
+  saveState();
+  renderBoard();
+  announce(`View zoomed to ${Math.round(state.zoom * 100)}%. Select the percentage to reset.`);
+}
+
+function zoomOut() {
+  if (state.zoom <= 1) return;
+  const previousZoom = state.zoom;
+  const nextZoom = Math.max(1, previousZoom / 1.5);
+  const ratio = nextZoom / previousZoom;
+  state.zoom = nextZoom;
+  state.panX *= ratio;
+  state.panY *= ratio;
+  axisLabelSignature = "";
+  saveState();
+  renderBoard();
+  announce(`View zoomed out to ${Math.round(state.zoom * 100)}%.`);
+}
+
+function zoomIn() {
+  if (state.zoom >= 8) return;
+  const previousZoom = state.zoom;
+  const nextZoom = Math.min(8, previousZoom * 1.5);
+  const ratio = nextZoom / previousZoom;
+  state.zoom = nextZoom;
+  state.panX *= ratio;
+  state.panY *= ratio;
+  axisLabelSignature = "";
+  saveState();
+  renderBoard();
+  announce(`View zoomed in to ${Math.round(state.zoom * 100)}%.`);
+}
+
+function resetView() {
+  state.zoom = 1;
+  state.panX = 0;
+  state.panY = 0;
+  axisLabelSignature = "";
+  saveState();
+  renderBoard();
+  announce("Full canvas view restored.");
+}
+
 function startStroke(event) {
-  if (activePointerId !== null || (state.tool !== "hand" && isLikelyPalm(event))) return;
+  if (activePointerId !== null || (!["hand", "zoom"].includes(state.tool) && isLikelyPalm(event))) return;
   const usingPenEraser = isPenEraser(event);
   if (event.button !== undefined && event.button !== 0 && !usingPenEraser) return;
   if (event.pointerType === "pen") lastPenInteraction = performance.now();
   activePointerId = event.pointerId;
   activePointerType = event.pointerType || "mouse";
+  if (state.tool === "zoom" && !usingPenEraser) {
+    const bounds = canvas.getBoundingClientRect();
+    activeZoomSelection = {
+      startX: Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+      startY: Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)),
+      endX: Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+      endY: Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)),
+    };
+    canvas.setPointerCapture(event.pointerId);
+    updateZoomSelection(event);
+    event.preventDefault();
+    return;
+  }
   if (state.tool === "hand" && !usingPenEraser) {
     activePan = {
       startX: event.clientX,
@@ -494,10 +645,15 @@ function startStroke(event) {
 }
 
 function continueStroke(event) {
+  if (activeZoomSelection && event.pointerId === activePointerId) {
+    updateZoomSelection(event);
+    event.preventDefault();
+    return;
+  }
   if (activePan && event.pointerId === activePointerId) {
     const bounds = canvas.getBoundingClientRect();
-    state.panX = clampPan(activePan.originX + event.clientX - activePan.startX, bounds.width);
-    state.panY = clampPan(activePan.originY + event.clientY - activePan.startY, bounds.height);
+    state.panX = clampPan(activePan.originX + event.clientX - activePan.startX, bounds.width * state.zoom);
+    state.panY = clampPan(activePan.originY + event.clientY - activePan.startY, bounds.height * state.zoom);
     renderBoard();
     event.preventDefault();
     return;
@@ -515,6 +671,17 @@ function continueStroke(event) {
 }
 
 function finishStroke(event) {
+  if (activeZoomSelection && event.pointerId === activePointerId) {
+    const selection = activeZoomSelection;
+    updateZoomSelection(event);
+    activeZoomSelection = null;
+    activePointerId = null;
+    activePointerType = null;
+    zoomSelection.classList.remove("is-visible");
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    applyZoomSelection(selection);
+    return;
+  }
   if (activePan && event.pointerId === activePointerId) {
     activePan = null;
     activePointerId = null;
@@ -567,11 +734,31 @@ function drawExportBackground(targetContext, width, height) {
   if (state.grid === "blank") return;
 
   targetContext.save();
-  targetContext.strokeStyle = "rgba(7, 29, 51, 0.12)";
-  targetContext.lineWidth = 1;
-  const spacing = 32;
+  const spacing = 32 * state.zoom;
   const originX = (width / 2) + state.panX;
   const originY = (height / 2) + state.panY;
+  if (state.zoom >= 1.5) {
+    const minorSpacing = spacing / 4;
+    const minorOffsetX = originX % minorSpacing;
+    const minorOffsetY = originY % minorSpacing;
+    targetContext.strokeStyle = "rgba(7, 29, 51, 0.05)";
+    targetContext.lineWidth = 1;
+    for (let x = minorOffsetX; x < width; x += minorSpacing) {
+      targetContext.beginPath();
+      targetContext.moveTo(x, 0);
+      targetContext.lineTo(x, height);
+      targetContext.stroke();
+    }
+    for (let y = minorOffsetY; y < height; y += minorSpacing) {
+      targetContext.beginPath();
+      targetContext.moveTo(0, y);
+      targetContext.lineTo(width, y);
+      targetContext.stroke();
+    }
+  }
+
+  targetContext.strokeStyle = "rgba(7, 29, 51, 0.12)";
+  targetContext.lineWidth = 1;
   const offsetX = originX % spacing;
   const offsetY = originY % spacing;
   for (let x = offsetX; x < width; x += spacing) {
@@ -598,21 +785,22 @@ function drawExportBackground(targetContext, width, height) {
 
     if (state.axisNumbers) {
       targetContext.fillStyle = "rgba(7, 29, 51, 0.68)";
-      targetContext.font = "10px Ubuntu, Arial, sans-serif";
-      const labelStep = spacing * 2;
+      targetContext.font = `${state.axisFontSize}px Ubuntu, Arial, sans-serif`;
+      const labelEvery = coordinateLabelInterval();
+      const labelStep = spacing * labelEvery;
       targetContext.textAlign = "center";
       targetContext.textBaseline = "top";
       const minXLabel = Math.ceil(-originX / labelStep);
       const maxXLabel = Math.floor((width - originX) / labelStep);
       for (let offset = minXLabel; offset <= maxXLabel; offset += 1) {
-        targetContext.fillText(String(offset * 2), originX + (offset * labelStep), originY + 7);
+        targetContext.fillText(formatCoordinate(offset * labelEvery), originX + (offset * labelStep), originY + 7);
       }
       targetContext.textAlign = "left";
       targetContext.textBaseline = "middle";
       const minYLabel = Math.ceil(-originY / labelStep);
       const maxYLabel = Math.floor((height - originY) / labelStep);
       for (let offset = minYLabel; offset <= maxYLabel; offset += 1) {
-        if (offset !== 0) targetContext.fillText(String(-offset * 2), originX + 8, originY + (offset * labelStep));
+        if (offset !== 0) targetContext.fillText(formatCoordinate(-offset * labelEvery), originX + 8, originY + (offset * labelStep));
       }
     }
   }
@@ -633,7 +821,9 @@ function downloadBoard() {
   exportContext.scale(scale, scale);
   inkContext.scale(scale, scale);
   drawExportBackground(exportContext, bounds.width, bounds.height);
-  inkContext.translate(state.panX, state.panY);
+  inkContext.translate((bounds.width / 2) + state.panX, (bounds.height / 2) + state.panY);
+  inkContext.scale(state.zoom, state.zoom);
+  inkContext.translate(-(bounds.width / 2), -(bounds.height / 2));
   state.strokes.forEach((stroke) => renderStroke(inkContext, stroke, bounds.width, bounds.height));
   exportContext.drawImage(inkCanvas, 0, 0, bounds.width, bounds.height);
   const link = document.createElement("a");
@@ -655,7 +845,7 @@ toolButtons.forEach((button) => {
 colorButtons.forEach((button) => {
   button.addEventListener("click", () => {
     state.color = button.dataset.color;
-    state.tool = ["eraser", "hand"].includes(state.tool) ? "pen" : state.tool;
+    state.tool = ["eraser", "hand", "zoom"].includes(state.tool) ? "pen" : state.tool;
     setPressed(colorButtons, button);
     syncControls();
     saveState();
@@ -681,10 +871,16 @@ axisNumbersButton.addEventListener("click", () => {
   announce(`Axis numbers ${state.axisNumbers ? "shown" : "hidden"}.`);
 });
 
+axisSizeInput.addEventListener("input", () => {
+  state.axisFontSize = Number(axisSizeInput.value);
+  syncControls();
+  saveState();
+});
+
 sizeInput.addEventListener("input", () => {
   state.size = Number(sizeInput.value);
   sizeOutput.value = state.size;
-  eraserPreview.style.setProperty("--eraser-diameter", `${strokeWidth({ tool: "eraser", size: state.size })}px`);
+  eraserPreview.style.setProperty("--eraser-diameter", `${strokeWidth({ tool: "eraser", size: state.size }) * state.zoom}px`);
   saveState();
 });
 
@@ -699,6 +895,9 @@ undoButton.addEventListener("click", undo);
 redoButton.addEventListener("click", redo);
 fullscreenButton.addEventListener("click", toggleFullscreenMode);
 panelToggleButton.addEventListener("click", togglePanelVisibility);
+zoomOutButton.addEventListener("click", zoomOut);
+zoomResetButton.addEventListener("click", resetView);
+zoomInButton.addEventListener("click", zoomIn);
 saveButton.addEventListener("click", downloadBoard);
 clearButton.addEventListener("click", () => {
   if (!clearButton.classList.contains("is-confirming")) {
@@ -731,10 +930,15 @@ canvas.addEventListener("pointerleave", hideEraserPreview);
 canvas.addEventListener("pointerup", finishStroke);
 canvas.addEventListener("pointercancel", finishStroke);
 canvas.addEventListener("lostpointercapture", (event) => {
-  if ((activeStroke || activePan) && event.pointerId === activePointerId) finishStroke(event);
+  if ((activeStroke || activePan || activeZoomSelection) && event.pointerId === activePointerId) finishStroke(event);
 });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 canvas.addEventListener("keydown", (event) => {
+  if (event.key === "Home") {
+    event.preventDefault();
+    resetView();
+    return;
+  }
   if (state.tool !== "hand") return;
   const step = event.shiftKey ? 64 : 32;
   const movement = {
@@ -747,17 +951,20 @@ canvas.addEventListener("keydown", (event) => {
     event.preventDefault();
     moveCanvasBy(...movement);
     announce("Canvas moved.");
-  } else if (event.key === "Home") {
-    event.preventDefault();
-    state.panX = 0;
-    state.panY = 0;
-    saveState();
-    renderBoard();
-    announce("Canvas centered.");
   }
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && activeZoomSelection) {
+    const pointerId = activePointerId;
+    activeZoomSelection = null;
+    activePointerId = null;
+    activePointerType = null;
+    zoomSelection.classList.remove("is-visible");
+    if (pointerId !== null && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+    announce("Zoom selection cancelled.");
+    return;
+  }
   if (event.key === "Escape" && document.querySelector(".whiteboard-main").classList.contains("is-fullscreen-fallback")) {
     document.querySelector(".whiteboard-main").classList.remove("is-fullscreen-fallback");
     syncFullscreenMode();

@@ -19,7 +19,18 @@ root.innerHTML = `
 
     <main class="whiteboard-main">
       <aside class="whiteboard-toolbar" id="whiteboard-toolbar" aria-label="Whiteboard tools">
-        <fieldset class="whiteboard-tool-group whiteboard-tool-group--drawing">
+        <div class="whiteboard-panel-tabs" aria-label="Control panel mode">
+          <button type="button" data-panel-tab="draw" aria-pressed="true">
+            <span class="whiteboard-panel-tab__icon" aria-hidden="true">✎</span>
+            <span><strong>Draw</strong><small>Tools & ink</small></span>
+          </button>
+          <button type="button" data-panel-tab="canvas" aria-pressed="false">
+            <span class="whiteboard-panel-tab__icon" aria-hidden="true">⌗</span>
+            <span><strong>Canvas</strong><small>Grid & axes</small></span>
+          </button>
+        </div>
+
+        <fieldset class="whiteboard-tool-group whiteboard-tool-group--drawing" data-panel-section="draw">
           <legend>Drawing tool</legend>
           <div class="whiteboard-tool-grid">
             <button class="whiteboard-tool" type="button" data-tool="pen" aria-pressed="true"><span aria-hidden="true">✎</span><span>Pen</span></button>
@@ -30,7 +41,7 @@ root.innerHTML = `
           </div>
         </fieldset>
 
-        <fieldset class="whiteboard-tool-group whiteboard-tool-group--colors">
+        <fieldset class="whiteboard-tool-group whiteboard-tool-group--colors" data-panel-section="draw">
           <legend>Ink color</legend>
           <div class="whiteboard-colors">
             <button class="whiteboard-color" style="--swatch: #071d33" type="button" data-color="#071d33" aria-label="Navy ink" aria-pressed="true"></button>
@@ -41,7 +52,7 @@ root.innerHTML = `
           </div>
         </fieldset>
 
-        <div class="whiteboard-tool-group whiteboard-tool-group--stroke">
+        <div class="whiteboard-tool-group whiteboard-tool-group--stroke" data-panel-section="draw">
           <label for="whiteboard-size">Stroke size</label>
           <div class="whiteboard-size-row">
             <input class="whiteboard-size" id="whiteboard-size" type="range" min="1" max="30" value="5" />
@@ -53,11 +64,11 @@ root.innerHTML = `
           </button>
         </div>
 
-        <fieldset class="whiteboard-tool-group whiteboard-tool-group--background">
+        <fieldset class="whiteboard-tool-group whiteboard-tool-group--background" data-panel-section="canvas">
           <legend>Background</legend>
           <div class="whiteboard-grid-options">
-            <button class="whiteboard-grid-button" type="button" data-grid="blank" aria-pressed="true">Blank</button>
-            <button class="whiteboard-grid-button" type="button" data-grid="square" aria-pressed="false">Grid</button>
+            <button class="whiteboard-grid-button" type="button" data-grid="blank" aria-pressed="false">Blank</button>
+            <button class="whiteboard-grid-button" type="button" data-grid="square" aria-pressed="true">Grid</button>
             <button class="whiteboard-grid-button" type="button" data-grid="coordinate" aria-pressed="false">Axes</button>
           </div>
           <button class="whiteboard-axis-numbers" id="whiteboard-axis-numbers" type="button" aria-pressed="true" disabled>
@@ -74,16 +85,39 @@ root.innerHTML = `
         </fieldset>
 
         <div class="whiteboard-history" aria-label="Board actions">
+          <p class="whiteboard-history__title">Board actions</p>
           <button class="whiteboard-action" id="whiteboard-undo" type="button" disabled>Undo</button>
           <button class="whiteboard-action" id="whiteboard-redo" type="button" disabled>Redo</button>
           <button class="whiteboard-action whiteboard-action--save" id="whiteboard-save" type="button">Download PNG</button>
           <button class="whiteboard-action whiteboard-action--clear" id="whiteboard-clear" type="button">Clear board</button>
         </div>
 
-        <p class="whiteboard-help"><strong>Tip:</strong> Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or select the percentage to reset. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
+        <details class="whiteboard-help">
+          <summary>Quick help</summary>
+          <p>Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or select the percentage to reset. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
+        </details>
       </aside>
 
       <section class="whiteboard-board" id="whiteboard-board" aria-label="Drawing area">
+        <div class="whiteboard-canvas-tabs" aria-label="Canvas tabs">
+          <div class="whiteboard-canvas-tabs__list" id="whiteboard-canvas-tabs" role="tablist" aria-label="Open canvases"></div>
+          <div class="whiteboard-canvas-tabs__actions">
+            <button id="whiteboard-canvas-new" type="button" aria-label="Create a new canvas" title="New canvas"><span aria-hidden="true">+</span><span>New</span></button>
+            <button id="whiteboard-canvas-rename" type="button" aria-label="Rename the current canvas" title="Rename canvas"><span aria-hidden="true">✎</span><span>Rename</span></button>
+            <button id="whiteboard-canvas-delete" type="button" aria-label="Delete the current canvas" title="Delete canvas"><span aria-hidden="true">×</span><span>Delete</span></button>
+          </div>
+        </div>
+        <dialog class="whiteboard-rename-dialog" id="whiteboard-rename-dialog">
+          <form id="whiteboard-rename-form">
+            <p>Canvas name</p>
+            <label for="whiteboard-canvas-name">Rename the current canvas</label>
+            <input id="whiteboard-canvas-name" name="canvasName" type="text" maxlength="32" autocomplete="off" required />
+            <div>
+              <button id="whiteboard-rename-cancel" type="button">Cancel</button>
+              <button type="submit">Save name</button>
+            </div>
+          </form>
+        </dialog>
         <div class="whiteboard-axis-labels" id="whiteboard-axis-labels" aria-hidden="true"></div>
         <div class="whiteboard-zoom-selection" id="whiteboard-zoom-selection" aria-hidden="true"></div>
         <canvas
@@ -97,7 +131,7 @@ root.innerHTML = `
         <p class="whiteboard-status" id="whiteboard-status" role="status" aria-live="polite"></p>
         <div class="whiteboard-zoom-controls" aria-label="Zoom controls">
           <button id="whiteboard-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
-          <button id="whiteboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view">100%</button>
+          <button id="whiteboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view"><span aria-hidden="true">↺</span></button>
           <button id="whiteboard-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
         </div>
         <button class="whiteboard-panel-toggle" id="whiteboard-panel-toggle" type="button" aria-expanded="true" aria-controls="whiteboard-toolbar" aria-label="Hide settings panel" title="Hide settings">
@@ -121,6 +155,16 @@ const context = canvas.getContext("2d");
 const toolButtons = [...document.querySelectorAll("[data-tool]")];
 const colorButtons = [...document.querySelectorAll("[data-color]")];
 const gridButtons = [...document.querySelectorAll("[data-grid]")];
+const panelTabButtons = [...document.querySelectorAll("[data-panel-tab]")];
+const panelSections = [...document.querySelectorAll("[data-panel-section]")];
+const canvasTabs = document.querySelector("#whiteboard-canvas-tabs");
+const newCanvasButton = document.querySelector("#whiteboard-canvas-new");
+const renameCanvasButton = document.querySelector("#whiteboard-canvas-rename");
+const deleteCanvasButton = document.querySelector("#whiteboard-canvas-delete");
+const renameCanvasDialog = document.querySelector("#whiteboard-rename-dialog");
+const renameCanvasForm = document.querySelector("#whiteboard-rename-form");
+const renameCanvasInput = document.querySelector("#whiteboard-canvas-name");
+const renameCanvasCancel = document.querySelector("#whiteboard-rename-cancel");
 const sizeInput = document.querySelector("#whiteboard-size");
 const sizeOutput = document.querySelector("#whiteboard-size-output");
 const smoothingButton = document.querySelector("#whiteboard-smoothing");
@@ -141,18 +185,22 @@ const clearButton = document.querySelector("#whiteboard-clear");
 const status = document.querySelector("#whiteboard-status");
 const eraserPreview = document.querySelector("#whiteboard-eraser-preview");
 
+const firstCanvas = createCanvasRecord("Canvas 1");
 let state = {
   tool: "pen",
   color: "#071d33",
   size: 5,
   smooth: true,
-  grid: "blank",
+  grid: "square",
   axisNumbers: true,
   axisFontSize: 9,
+  panelTab: "draw",
   zoom: 1,
   panX: 0,
   panY: 0,
   strokes: [],
+  canvases: [firstCanvas],
+  activeCanvasId: firstCanvas.id,
 };
 let redoStack = [];
 let activeStroke = null;
@@ -162,8 +210,10 @@ let activePan = null;
 let activeZoomSelection = null;
 let lastPenInteraction = 0;
 let clearTimer = null;
+let deleteCanvasTimer = null;
 let statusTimer = null;
 let axisLabelSignature = "";
+let canvasTabSignature = "";
 
 function isFullscreenMode() {
   const main = document.querySelector(".whiteboard-main");
@@ -179,6 +229,7 @@ function syncFullscreenMode() {
   fullscreenButton.setAttribute("aria-label", fullscreen ? "Exit full-screen whiteboard" : "Open full-screen whiteboard");
   fullscreenButton.title = fullscreen ? "Exit full screen" : "Full screen";
   syncPanelVisibility();
+  syncPanelTabs();
   document.body.classList.toggle("has-whiteboard-fullscreen", fullscreen);
   window.setTimeout(renderBoard, 0);
 }
@@ -193,6 +244,19 @@ function syncPanelVisibility() {
 function togglePanelVisibility() {
   document.querySelector(".whiteboard-main").classList.toggle("is-toolbar-hidden");
   syncPanelVisibility();
+}
+
+function syncPanelTabs() {
+  const activeTab = state.panelTab === "canvas" ? "canvas" : "draw";
+  const fullscreen = isFullscreenMode();
+  panelTabButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.panelTab === activeTab));
+  });
+  panelSections.forEach((section) => {
+    section.hidden = fullscreen
+      ? section.dataset.panelSection !== "draw"
+      : section.dataset.panelSection !== activeTab;
+  });
 }
 
 async function toggleFullscreenMode() {
@@ -226,8 +290,196 @@ function announce(message) {
   statusTimer = window.setTimeout(() => status.classList.remove("is-visible"), 1800);
 }
 
+function createCanvasRecord(name, source = {}) {
+  const id = typeof globalThis.crypto?.randomUUID === "function"
+    ? `canvas-${globalThis.crypto.randomUUID()}`
+    : `canvas-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return {
+    id,
+    name,
+    strokes: Array.isArray(source.strokes) ? source.strokes : [],
+    grid: ["blank", "square", "coordinate"].includes(source.grid) ? source.grid : "square",
+    axisNumbers: source.axisNumbers !== false,
+    axisFontSize: Number.isFinite(Number(source.axisFontSize)) ? Math.min(30, Math.max(8, Number(source.axisFontSize))) : 9,
+    zoom: Number.isFinite(Number(source.zoom)) ? Math.min(8, Math.max(1, Number(source.zoom))) : 1,
+    panX: Number.isFinite(Number(source.panX)) ? Number(source.panX) : 0,
+    panY: Number.isFinite(Number(source.panY)) ? Number(source.panY) : 0,
+  };
+}
+
+function normalizeCanvasRecord(record, index) {
+  const normalized = createCanvasRecord(
+    typeof record?.name === "string" && record.name.trim() ? record.name.trim().slice(0, 32) : `Canvas ${index + 1}`,
+    record,
+  );
+  if (typeof record?.id === "string" && record.id) normalized.id = record.id;
+  return normalized;
+}
+
+function activeCanvasRecord() {
+  return state.canvases.find((item) => item.id === state.activeCanvasId) || state.canvases[0];
+}
+
+function syncActiveCanvasState() {
+  const activeCanvas = activeCanvasRecord();
+  if (!activeCanvas) return;
+  Object.assign(activeCanvas, {
+    strokes: state.strokes,
+    grid: state.grid,
+    axisNumbers: state.axisNumbers,
+    axisFontSize: state.axisFontSize,
+    zoom: state.zoom,
+    panX: state.panX,
+    panY: state.panY,
+  });
+}
+
+function applyCanvasState(canvasRecord) {
+  state.strokes = canvasRecord.strokes;
+  state.grid = canvasRecord.grid;
+  state.axisNumbers = canvasRecord.axisNumbers;
+  state.axisFontSize = canvasRecord.axisFontSize;
+  state.zoom = canvasRecord.zoom;
+  state.panX = canvasRecord.panX;
+  state.panY = canvasRecord.panY;
+  redoStack = [];
+  activeStroke = null;
+  activePan = null;
+  activeZoomSelection = null;
+  activePointerId = null;
+  activePointerType = null;
+  axisLabelSignature = "";
+  zoomSelection.classList.remove("is-visible");
+  eraserPreview.classList.remove("is-visible");
+  clearButton.classList.remove("is-confirming");
+  clearButton.textContent = "Clear board";
+}
+
+function syncCanvasTabs() {
+  const signature = `${state.activeCanvasId}:${state.canvases.map((item) => `${item.id}:${item.name}`).join("|")}`;
+  if (signature !== canvasTabSignature) {
+    canvasTabSignature = signature;
+    canvasTabs.replaceChildren();
+    state.canvases.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.id = `whiteboard-tab-${item.id}`;
+      button.dataset.canvasId = item.id;
+      button.role = "tab";
+      button.setAttribute("aria-selected", String(item.id === state.activeCanvasId));
+      button.tabIndex = item.id === state.activeCanvasId ? 0 : -1;
+      button.textContent = item.name;
+      canvasTabs.append(button);
+    });
+  }
+  deleteCanvasButton.disabled = state.canvases.length <= 1;
+  const activeCanvas = activeCanvasRecord();
+  board.setAttribute("aria-label", `${activeCanvas?.name || "Canvas"} drawing area`);
+}
+
+function activateCanvas(canvasId, { announceChange = true } = {}) {
+  if (activePointerId !== null) {
+    announce("Finish the current gesture before changing canvases.");
+    return;
+  }
+  const nextCanvas = state.canvases.find((item) => item.id === canvasId);
+  if (!nextCanvas || nextCanvas.id === state.activeCanvasId) return;
+  syncActiveCanvasState();
+  state.activeCanvasId = nextCanvas.id;
+  applyCanvasState(nextCanvas);
+  canvasTabSignature = "";
+  syncCanvasTabs();
+  saveState();
+  renderBoard();
+  if (announceChange) announce(`${nextCanvas.name} opened.`);
+}
+
+function nextCanvasName() {
+  const highestNumber = state.canvases.reduce((highest, item) => {
+    const match = item.name.match(/^Canvas (\d+)$/);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `Canvas ${highestNumber + 1}`;
+}
+
+function addCanvas() {
+  syncActiveCanvasState();
+  const newCanvas = createCanvasRecord(nextCanvasName());
+  state.canvases.push(newCanvas);
+  canvasTabSignature = "";
+  activateCanvas(newCanvas.id, { announceChange: false });
+  announce(`${newCanvas.name} created.`);
+}
+
+function openRenameCanvas() {
+  const activeCanvas = activeCanvasRecord();
+  if (!activeCanvas) return;
+  resetDeleteCanvasConfirmation();
+  renameCanvasInput.value = activeCanvas.name;
+  renameCanvasInput.setCustomValidity("");
+  renameCanvasDialog.showModal();
+  window.requestAnimationFrame(() => renameCanvasInput.select());
+}
+
+function renameActiveCanvas(event) {
+  event.preventDefault();
+  const activeCanvas = activeCanvasRecord();
+  const nextName = renameCanvasInput.value.trim();
+  if (!nextName) {
+    renameCanvasInput.setCustomValidity("Enter a canvas name.");
+    renameCanvasInput.reportValidity();
+    return;
+  }
+  const duplicate = state.canvases.some((item) => item.id !== activeCanvas.id && item.name.toLowerCase() === nextName.toLowerCase());
+  if (duplicate) {
+    renameCanvasInput.setCustomValidity("Use a different canvas name.");
+    renameCanvasInput.reportValidity();
+    return;
+  }
+  renameCanvasInput.setCustomValidity("");
+  activeCanvas.name = nextName.slice(0, 32);
+  canvasTabSignature = "";
+  syncCanvasTabs();
+  saveState();
+  renameCanvasDialog.close();
+  announce(`Canvas renamed to ${activeCanvas.name}.`);
+}
+
+function resetDeleteCanvasConfirmation() {
+  window.clearTimeout(deleteCanvasTimer);
+  deleteCanvasButton.classList.remove("is-confirming");
+  deleteCanvasButton.setAttribute("aria-label", "Delete the current canvas");
+  deleteCanvasButton.title = "Delete canvas";
+  deleteCanvasButton.querySelector("span:last-child").textContent = "Delete";
+}
+
+function deleteActiveCanvas() {
+  if (state.canvases.length <= 1) return;
+  const activeIndex = state.canvases.findIndex((item) => item.id === state.activeCanvasId);
+  const activeCanvas = state.canvases[activeIndex];
+  if (!deleteCanvasButton.classList.contains("is-confirming")) {
+    deleteCanvasButton.classList.add("is-confirming");
+    deleteCanvasButton.setAttribute("aria-label", `Confirm deletion of ${activeCanvas.name}`);
+    deleteCanvasButton.title = `Delete ${activeCanvas.name}`;
+    deleteCanvasButton.querySelector("span:last-child").textContent = "Confirm";
+    announce(`Select Delete again to remove ${activeCanvas.name}.`);
+    deleteCanvasTimer = window.setTimeout(resetDeleteCanvasConfirmation, 3000);
+    return;
+  }
+  const nextCanvas = state.canvases[activeIndex + 1] || state.canvases[activeIndex - 1];
+  state.canvases.splice(activeIndex, 1);
+  state.activeCanvasId = nextCanvas.id;
+  applyCanvasState(nextCanvas);
+  resetDeleteCanvasConfirmation();
+  canvasTabSignature = "";
+  saveState();
+  renderBoard();
+  announce(`${activeCanvas.name} deleted.`);
+}
+
 function saveState() {
   try {
+    syncActiveCanvasState();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     announce("This board could not be saved in the browser.");
@@ -237,19 +489,26 @@ function saveState() {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!saved || !Array.isArray(saved.strokes)) return;
+    if (!saved || (!Array.isArray(saved.strokes) && !Array.isArray(saved.canvases))) return;
+    const savedCanvases = Array.isArray(saved.canvases) && saved.canvases.length
+      ? saved.canvases.map(normalizeCanvasRecord)
+      : [createCanvasRecord("Canvas 1", saved)];
+    const activeCanvas = savedCanvases.find((item) => item.id === saved.activeCanvasId) || savedCanvases[0];
     state = {
       tool: ["pen", "highlighter", "eraser", "hand", "zoom"].includes(saved.tool) ? saved.tool : state.tool,
       color: typeof saved.color === "string" ? saved.color : state.color,
       size: Number.isFinite(Number(saved.size)) ? Math.min(30, Math.max(1, Number(saved.size))) : state.size,
       smooth: saved.smooth !== false,
-      grid: ["blank", "square", "coordinate"].includes(saved.grid) ? saved.grid : state.grid,
-      axisNumbers: saved.axisNumbers !== false,
-      axisFontSize: Number.isFinite(Number(saved.axisFontSize)) ? Math.min(30, Math.max(8, Number(saved.axisFontSize))) : 9,
-      zoom: Number.isFinite(Number(saved.zoom)) ? Math.min(8, Math.max(1, Number(saved.zoom))) : 1,
-      panX: Number.isFinite(Number(saved.panX)) ? Number(saved.panX) : 0,
-      panY: Number.isFinite(Number(saved.panY)) ? Number(saved.panY) : 0,
-      strokes: saved.strokes,
+      grid: activeCanvas.grid,
+      axisNumbers: activeCanvas.axisNumbers,
+      axisFontSize: activeCanvas.axisFontSize,
+      panelTab: saved.panelTab === "canvas" ? "canvas" : "draw",
+      zoom: activeCanvas.zoom,
+      panX: activeCanvas.panX,
+      panY: activeCanvas.panY,
+      strokes: activeCanvas.strokes,
+      canvases: savedCanvases,
+      activeCanvasId: activeCanvas.id,
     };
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -257,6 +516,8 @@ function loadState() {
 }
 
 function syncControls() {
+  syncPanelTabs();
+  syncCanvasTabs();
   toolButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.tool === state.tool)));
   colorButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.color === state.color)));
   gridButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.grid === state.grid)));
@@ -287,7 +548,7 @@ function syncControls() {
   board.classList.toggle("has-ink", state.strokes.length > 0);
   zoomOutButton.disabled = state.zoom <= 1;
   zoomInButton.disabled = state.zoom >= 8;
-  zoomResetButton.textContent = `${Math.round(state.zoom * 100)}%`;
+  zoomResetButton.setAttribute("aria-label", `Reset zoom and center canvas. Current zoom ${Math.round(state.zoom * 100)}%.`);
   undoButton.disabled = state.strokes.length === 0;
   redoButton.disabled = redoStack.length === 0;
 }
@@ -557,7 +818,7 @@ function applyZoomSelection(selection) {
   axisLabelSignature = "";
   saveState();
   renderBoard();
-  announce(`View zoomed to ${Math.round(state.zoom * 100)}%. Select the percentage to reset.`);
+  announce(`${Math.round(state.zoom * 100)}% zoom`);
 }
 
 function zoomOut() {
@@ -571,7 +832,7 @@ function zoomOut() {
   axisLabelSignature = "";
   saveState();
   renderBoard();
-  announce(`View zoomed out to ${Math.round(state.zoom * 100)}%.`);
+  announce(`${Math.round(state.zoom * 100)}% zoom`);
 }
 
 function zoomIn() {
@@ -585,7 +846,7 @@ function zoomIn() {
   axisLabelSignature = "";
   saveState();
   renderBoard();
-  announce(`View zoomed in to ${Math.round(state.zoom * 100)}%.`);
+  announce(`${Math.round(state.zoom * 100)}% zoom`);
 }
 
 function resetView() {
@@ -595,7 +856,7 @@ function resetView() {
   axisLabelSignature = "";
   saveState();
   renderBoard();
-  announce("Full canvas view restored.");
+  announce("100% zoom · canvas centered");
 }
 
 function startStroke(event) {
@@ -827,7 +1088,8 @@ function downloadBoard() {
   state.strokes.forEach((stroke) => renderStroke(inkContext, stroke, bounds.width, bounds.height));
   exportContext.drawImage(inkCanvas, 0, 0, bounds.width, bounds.height);
   const link = document.createElement("a");
-  link.download = `math-whiteboard-${new Date().toISOString().slice(0, 10)}.png`;
+  const canvasName = (activeCanvasRecord()?.name || "canvas").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  link.download = `math-whiteboard-${canvasName}-${new Date().toISOString().slice(0, 10)}.png`;
   link.href = exportCanvas.toDataURL("image/png");
   link.click();
   announce("Whiteboard downloaded as a PNG.");
@@ -862,6 +1124,44 @@ gridButtons.forEach((button) => {
     announce(`${button.textContent.trim()} background selected.`);
   });
 });
+
+panelTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.panelTab = button.dataset.panelTab === "canvas" ? "canvas" : "draw";
+    syncPanelTabs();
+    saveState();
+  });
+});
+
+canvasTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-canvas-id]");
+  if (!tab) return;
+  resetDeleteCanvasConfirmation();
+  activateCanvas(tab.dataset.canvasId);
+});
+
+canvasTabs.addEventListener("keydown", (event) => {
+  const tabs = [...canvasTabs.querySelectorAll("[data-canvas-id]")];
+  const currentIndex = tabs.findIndex((tab) => tab === event.target);
+  if (currentIndex < 0 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabs.length;
+  if (event.key === "Home") nextIndex = 0;
+  if (event.key === "End") nextIndex = tabs.length - 1;
+  const nextId = tabs[nextIndex].dataset.canvasId;
+  resetDeleteCanvasConfirmation();
+  activateCanvas(nextId);
+  window.requestAnimationFrame(() => canvasTabs.querySelector(`[data-canvas-id="${CSS.escape(nextId)}"]`)?.focus());
+});
+
+newCanvasButton.addEventListener("click", addCanvas);
+renameCanvasButton.addEventListener("click", openRenameCanvas);
+deleteCanvasButton.addEventListener("click", deleteActiveCanvas);
+renameCanvasForm.addEventListener("submit", renameActiveCanvas);
+renameCanvasCancel.addEventListener("click", () => renameCanvasDialog.close());
+renameCanvasInput.addEventListener("input", () => renameCanvasInput.setCustomValidity(""));
 
 axisNumbersButton.addEventListener("click", () => {
   state.axisNumbers = !state.axisNumbers;
@@ -982,5 +1282,6 @@ document.addEventListener("fullscreenchange", syncFullscreenMode);
 const resizeObserver = new ResizeObserver(renderBoard);
 resizeObserver.observe(board);
 loadState();
+syncCanvasTabs();
 syncControls();
 renderBoard();

@@ -1,0 +1,405 @@
+body
+  min-height: 100vh
+  min-height: 100dvh
+  background: var(--ink)
+  overflow-x: hidden
+
+button, input
+  color: inherit
+
+button
+  cursor: pointer
+
+.whiteboard-shell
+  min-height: 100vh
+  min-height: 100dvh
+  display: grid
+  grid-template-rows: auto 1fr
+
+.whiteboard-header
+  position: relative
+  z-index: 10
+  min-height: 76px
+  padding: .85rem var(--page-gutter)
+  display: grid
+  grid-template-columns: 1fr auto 1fr
+  align-items: center
+  gap: 1rem
+  border-bottom: 1px solid rgba(255, 253, 248, .16)
+  background: var(--ink)
+  color: var(--white)
+
+.whiteboard-brand
+  width: max-content
+  display: inline-flex
+  align-items: center
+  gap: .7rem
+
+  strong, small
+    display: block
+
+  strong
+    line-height: 1
+
+  small
+    margin-top: .25rem
+    color: rgba(255, 253, 248, .62)
+    font-size: .61rem
+    font-weight: 700
+    letter-spacing: .13em
+    text-transform: uppercase
+
+.whiteboard-brand__mark
+  width: 2.4rem
+  height: 2.4rem
+  display: grid
+  place-items: center
+  border-radius: 50%
+  background: var(--gold)
+  color: var(--ink)
+  font-family: Georgia, serif
+  font-size: 1.35rem
+  font-style: italic
+
+.whiteboard-header__title
+  text-align: center
+
+  strong
+    display: block
+    font-family: Georgia, 'Times New Roman', serif
+    font-size: 1.25rem
+
+  span
+    display: block
+    margin-top: .15rem
+    color: rgba(255, 253, 248, .58)
+    font-size: .66rem
+    font-weight: 700
+    letter-spacing: .1em
+    text-transform: uppercase
+
+.whiteboard-header__home
+  justify-self: end
+  padding: .7rem 1rem
+  border: 1px solid rgba(255, 253, 248, .22)
+  border-radius: 999px
+  font-size: .72rem
+  font-weight: 700
+
+  &:hover
+    border-color: var(--gold)
+    background: rgba(255, 209, 102, .08)
+
+.whiteboard-main
+  min-height: 0
+  padding: clamp(.75rem, 2vw, 1.5rem)
+  display: grid
+  grid-template-columns: minmax(190px, 230px) minmax(0, 1fr)
+  gap: clamp(.75rem, 1.5vw, 1.25rem)
+
+.whiteboard-toolbar
+  min-height: 0
+  padding: 1rem
+  display: flex
+  flex-direction: column
+  gap: 1rem
+  border: 1px solid rgba(255, 253, 248, .16)
+  border-radius: 1.1rem
+  background: #142c43
+  color: var(--white)
+
+.whiteboard-tool-group
+  margin: 0
+  padding: 0
+  border: 0
+
+  legend, > label
+    margin-bottom: .55rem
+    color: rgba(255, 253, 248, .68)
+    font-size: .62rem
+    font-weight: 700
+    letter-spacing: .13em
+    text-transform: uppercase
+
+.whiteboard-tool-grid
+  display: grid
+  grid-template-columns: repeat(3, 1fr)
+  gap: .4rem
+
+.whiteboard-tool
+  min-height: 3.2rem
+  padding: .45rem .25rem
+  display: grid
+  place-items: center
+  gap: .15rem
+  border: 1px solid rgba(255, 253, 248, .18)
+  border-radius: .7rem
+  background: rgba(255, 253, 248, .04)
+  color: var(--white)
+  font-size: .61rem
+  font-weight: 700
+
+  span:first-child
+    font-size: 1.05rem
+
+  &:hover
+    border-color: rgba(255, 209, 102, .7)
+
+  &[aria-pressed='true']
+    border-color: var(--gold)
+    background: var(--gold)
+    color: var(--ink)
+
+.whiteboard-colors
+  display: grid
+  grid-template-columns: repeat(5, 1fr)
+  gap: .45rem
+
+.whiteboard-color
+  position: relative
+  aspect-ratio: 1
+  border: 2px solid transparent
+  border-radius: 50%
+  background: var(--swatch)
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18)
+
+  &[aria-pressed='true']
+    border-color: var(--white)
+    outline: 2px solid var(--swatch)
+    outline-offset: 2px
+
+.whiteboard-size-row
+  display: grid
+  grid-template-columns: 1fr 2.25rem
+  align-items: center
+  gap: .65rem
+
+  output
+    min-height: 2.25rem
+    display: grid
+    place-items: center
+    border-radius: .55rem
+    background: rgba(255, 253, 248, .08)
+    font-size: .7rem
+    font-weight: 700
+
+.whiteboard-size
+  width: 100%
+  accent-color: var(--gold)
+
+.whiteboard-grid-options
+  display: grid
+  grid-template-columns: repeat(3, 1fr)
+  gap: .4rem
+
+.whiteboard-grid-button
+  min-height: 2.6rem
+  padding: .35rem
+  border: 1px solid rgba(255, 253, 248, .17)
+  border-radius: .6rem
+  background: transparent
+  color: rgba(255, 253, 248, .76)
+  font-size: .58rem
+  font-weight: 700
+
+  &[aria-pressed='true']
+    border-color: var(--blue)
+    background: var(--blue)
+    color: var(--ink)
+
+.whiteboard-history
+  display: grid
+  grid-template-columns: repeat(2, 1fr)
+  gap: .45rem
+
+.whiteboard-action
+  min-height: 2.75rem
+  padding: .55rem
+  border: 1px solid rgba(255, 253, 248, .18)
+  border-radius: .65rem
+  background: rgba(255, 253, 248, .05)
+  color: var(--white)
+  font-size: .64rem
+  font-weight: 700
+
+  &:hover:not(:disabled)
+    border-color: var(--gold)
+
+  &:disabled
+    cursor: not-allowed
+    opacity: .35
+
+.whiteboard-action--save
+  grid-column: 1 / -1
+  border-color: var(--green)
+  background: var(--green)
+  color: var(--ink)
+
+.whiteboard-action--clear
+  grid-column: 1 / -1
+  color: #ffb3a1
+
+  &.is-confirming
+    border-color: var(--coral)
+    background: var(--coral)
+    color: var(--ink)
+
+.whiteboard-help
+  margin-top: auto
+  padding-top: .85rem
+  border-top: 1px solid rgba(255, 253, 248, .12)
+  color: rgba(255, 253, 248, .55)
+  font-size: .64rem
+  line-height: 1.55
+
+  strong
+    color: var(--white)
+
+.whiteboard-board
+  position: relative
+  min-width: 0
+  min-height: 620px
+  overflow: hidden
+  border: 1px solid rgba(7, 29, 51, .22)
+  border-radius: 1.1rem
+  background-color: var(--white)
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .22)
+
+  &.is-grid-square, &.is-grid-coordinate
+    background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px)
+    background-size: 32px 32px
+    background-position: center center
+
+  &.is-grid-coordinate::before, &.is-grid-coordinate::after
+    content: ''
+    position: absolute
+    z-index: 0
+    pointer-events: none
+    background: rgba(7, 29, 51, .48)
+
+  &.is-grid-coordinate::before
+    top: 0
+    bottom: 0
+    left: 50%
+    width: 2px
+
+  &.is-grid-coordinate::after
+    top: 50%
+    right: 0
+    left: 0
+    height: 2px
+
+.whiteboard-canvas
+  position: absolute
+  z-index: 1
+  inset: 0
+  width: 100%
+  height: 100%
+  display: block
+  cursor: crosshair
+  touch-action: none
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-erasing
+    cursor: cell
+
+.whiteboard-board__hint
+  position: absolute
+  z-index: 2
+  top: 1rem
+  left: 50%
+  padding: .55rem .8rem
+  transform: translateX(-50%)
+  border: 1px solid var(--line)
+  border-radius: 999px
+  background: rgba(255, 253, 248, .88)
+  color: var(--ink-soft)
+  font-size: .65rem
+  font-weight: 700
+  pointer-events: none
+  transition: opacity .25s ease
+
+.whiteboard-board.has-ink .whiteboard-board__hint
+  opacity: 0
+
+.whiteboard-status
+  position: absolute
+  z-index: 3
+  right: 1rem
+  bottom: 1rem
+  max-width: min(28rem, calc(100% - 2rem))
+  padding: .6rem .8rem
+  border-radius: .6rem
+  background: var(--ink)
+  color: var(--white)
+  font-size: .65rem
+  font-weight: 700
+  opacity: 0
+  transform: translateY(.5rem)
+  pointer-events: none
+  transition: opacity .18s ease, transform .18s ease
+
+  &.is-visible
+    opacity: 1
+    transform: translateY(0)
+
+@media (max-width: 900px)
+  .whiteboard-header
+    grid-template-columns: 1fr auto
+
+  .whiteboard-header__title
+    display: none
+
+  .whiteboard-main
+    grid-template-columns: 1fr
+    grid-template-rows: auto minmax(520px, 1fr)
+
+  .whiteboard-toolbar
+    display: grid
+    grid-template-columns: repeat(4, minmax(0, 1fr))
+    align-items: start
+
+  .whiteboard-history
+    grid-template-columns: repeat(2, 1fr)
+
+  .whiteboard-help
+    display: none
+
+  .whiteboard-board
+    min-height: 520px
+
+@media (max-width: 620px)
+  .whiteboard-header
+    min-height: 62px
+    padding: .65rem 1rem
+
+  .whiteboard-brand small
+    display: none
+
+  .whiteboard-header__home
+    padding: .6rem .75rem
+
+  .whiteboard-main
+    padding: .55rem
+    grid-template-rows: auto minmax(420px, calc(100dvh - 350px))
+    gap: .55rem
+
+  .whiteboard-toolbar
+    padding: .65rem
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+    gap: .65rem
+    border-radius: .8rem
+
+  .whiteboard-board
+    min-height: 420px
+    border-radius: .8rem
+
+  .whiteboard-board__hint
+    top: .7rem
+    font-size: .58rem
+
+@media (prefers-reduced-motion: reduce)
+  *, *::before, *::after
+    scroll-behavior: auto !important
+    transition-duration: .01ms !important

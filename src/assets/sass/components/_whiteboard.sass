@@ -107,6 +107,12 @@ button
   border-radius: 1.1rem
   background: #142c43
   color: var(--white)
+  -webkit-user-select: none
+  user-select: none
+
+  *
+    -webkit-user-select: none
+    user-select: none
 
 .whiteboard-tool-group
   margin: 0
@@ -123,7 +129,7 @@ button
 
 .whiteboard-tool-grid
   display: grid
-  grid-template-columns: repeat(3, 1fr)
+  grid-template-columns: repeat(4, 1fr)
   gap: .4rem
 
 .whiteboard-tool
@@ -187,6 +193,61 @@ button
   width: 100%
   accent-color: var(--gold)
 
+.whiteboard-smoothing
+  width: 100%
+  min-height: 3.25rem
+  margin-top: .7rem
+  padding: .55rem .65rem
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: .7rem
+  border: 1px solid rgba(255, 253, 248, .17)
+  border-radius: .65rem
+  background: rgba(255, 253, 248, .04)
+  color: var(--white)
+  text-align: left
+
+  strong, small
+    display: block
+
+  strong
+    font-size: .65rem
+
+  small
+    margin-top: .18rem
+    color: rgba(255, 253, 248, .52)
+    font-size: .52rem
+
+  &[aria-pressed='true']
+    border-color: rgba(169, 223, 114, .7)
+    background: rgba(169, 223, 114, .08)
+
+.whiteboard-smoothing__switch
+  position: relative
+  flex: 0 0 auto
+  width: 2rem
+  height: 1.1rem
+  border-radius: 999px
+  background: rgba(255, 253, 248, .2)
+  transition: background .18s ease
+
+  i
+    position: absolute
+    width: .78rem
+    height: .78rem
+    top: .16rem
+    left: .18rem
+    border-radius: 50%
+    background: var(--white)
+    transition: transform .18s ease
+
+.whiteboard-smoothing[aria-pressed='true'] .whiteboard-smoothing__switch
+  background: var(--green)
+
+  i
+    transform: translateX(.86rem)
+
 .whiteboard-grid-options
   display: grid
   grid-template-columns: repeat(3, 1fr)
@@ -206,6 +267,64 @@ button
     border-color: var(--blue)
     background: var(--blue)
     color: var(--ink)
+
+.whiteboard-axis-numbers
+  width: 100%
+  min-height: 2.8rem
+  margin-top: .55rem
+  padding: .5rem .6rem
+  display: flex
+  align-items: center
+  justify-content: space-between
+  gap: .65rem
+  border: 1px solid rgba(255, 253, 248, .17)
+  border-radius: .65rem
+  background: rgba(255, 253, 248, .04)
+  color: var(--white)
+  text-align: left
+
+  strong, small
+    display: block
+
+  strong
+    font-size: .63rem
+
+  small
+    margin-top: .15rem
+    color: rgba(255, 253, 248, .52)
+    font-size: .5rem
+
+  &[aria-pressed='true']:not(:disabled)
+    border-color: rgba(169, 223, 114, .7)
+    background: rgba(169, 223, 114, .08)
+
+  &:disabled
+    cursor: not-allowed
+    opacity: .38
+
+.whiteboard-axis-numbers__switch
+  position: relative
+  flex: 0 0 auto
+  width: 1.8rem
+  height: 1rem
+  border-radius: 999px
+  background: rgba(255, 253, 248, .2)
+
+  i
+    position: absolute
+    top: .14rem
+    left: .16rem
+    width: .72rem
+    height: .72rem
+    border-radius: 50%
+    background: var(--white)
+    transition: transform .18s ease
+
+.whiteboard-axis-numbers[aria-pressed='true'] .whiteboard-axis-numbers__switch
+  background: var(--green)
+
+  i
+    transform: translateX(.76rem)
 
 .whiteboard-history
   display: grid
@@ -255,7 +374,80 @@ button
   strong
     color: var(--white)
 
+body.has-whiteboard-fullscreen
+  overflow: hidden
+
+.whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
+  position: fixed
+  z-index: 1000
+  inset: 0
+  width: 100vw
+  height: 100vh
+  height: 100dvh
+  padding: 0
+  display: block
+  overflow: hidden
+  background: var(--ink)
+
+  .whiteboard-board
+    position: absolute
+    inset: 0
+    width: 100%
+    height: 100%
+    min-height: 0
+    border: 0
+    border-radius: 0
+
+  .whiteboard-toolbar
+    position: absolute
+    z-index: 12
+    width: min(calc(100% - 8rem), 760px)
+    min-height: 0
+    max-height: none
+    bottom: 1rem
+    left: 50%
+    padding: .7rem .85rem
+    display: grid
+    grid-template-columns: minmax(210px, 1.2fr) minmax(150px, .8fr) minmax(170px, 1fr)
+    align-items: end
+    gap: 1rem
+    overflow: visible
+    border-color: rgba(255, 253, 248, .24)
+    box-shadow: 0 18px 45px rgba(7, 29, 51, .28)
+    transform: translateX(-50%)
+    transition: opacity .2s ease, visibility .2s ease, transform .2s ease
+
+  .whiteboard-tool-group--background, .whiteboard-smoothing, .whiteboard-history, .whiteboard-help
+    display: none
+
+  .whiteboard-tool-group
+    min-width: 0
+
+    legend, > label
+      margin-bottom: .35rem
+
+  .whiteboard-tool
+    min-height: 2.65rem
+
+  .whiteboard-color
+    max-width: 2.25rem
+
+  .whiteboard-board__hint
+    top: 1rem
+
+  .whiteboard-status
+    right: 1rem
+    bottom: 5rem
+
+  &.is-toolbar-hidden .whiteboard-toolbar
+    visibility: hidden
+    opacity: 0
+    pointer-events: none
+    transform: translate(-50%, calc(100% + 2rem))
+
 .whiteboard-board
+  --board-pan-x: 0px
+  --board-pan-y: 0px
   position: relative
   min-width: 0
   min-height: 620px
@@ -268,7 +460,7 @@ button
   &.is-grid-square, &.is-grid-coordinate
     background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px)
     background-size: 32px 32px
-    background-position: center center
+    background-position: calc(50% + 16px + var(--board-pan-x)) calc(50% + 16px + var(--board-pan-y))
 
   &.is-grid-coordinate::before, &.is-grid-coordinate::after
     content: ''
@@ -280,14 +472,16 @@ button
   &.is-grid-coordinate::before
     top: 0
     bottom: 0
-    left: 50%
+    left: calc(50% + var(--board-pan-x))
     width: 2px
+    transform: translateX(-50%)
 
   &.is-grid-coordinate::after
-    top: 50%
+    top: calc(50% + var(--board-pan-y))
     right: 0
     left: 0
     height: 2px
+    transform: translateY(-50%)
 
 .whiteboard-canvas
   position: absolute
@@ -298,11 +492,136 @@ button
   display: block
   cursor: crosshair
   touch-action: none
+  overscroll-behavior: contain
   -webkit-user-select: none
   user-select: none
 
   &.is-erasing
-    cursor: cell
+    cursor: none
+
+  &.is-panning
+    cursor: grab
+
+  &.is-panning-active
+    cursor: grabbing
+
+.whiteboard-axis-labels
+  position: absolute
+  z-index: 0
+  inset: 0
+  overflow: hidden
+  opacity: 0
+  pointer-events: none
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-visible
+    opacity: 1
+
+.whiteboard-axis-labels__layer
+  position: absolute
+  inset: 0
+  will-change: transform
+
+.whiteboard-axis-label
+  position: absolute
+  padding: .05rem .18rem
+  border-radius: .18rem
+  background: rgba(255, 253, 248, .78)
+  color: rgba(7, 29, 51, .7)
+  font-family: Ubuntu, Arial, sans-serif
+  font-size: .55rem
+  font-weight: 500
+  line-height: 1
+  white-space: nowrap
+
+.whiteboard-axis-label--x
+  transform: translateX(-50%)
+
+.whiteboard-axis-label--y
+  transform: translateY(-50%)
+
+.whiteboard-eraser-preview
+  --eraser-diameter: 15px
+  position: absolute
+  z-index: 3
+  width: var(--eraser-diameter)
+  height: var(--eraser-diameter)
+  border: 2px dashed var(--coral)
+  border-radius: 50%
+  background: rgba(255, 107, 72, .08)
+  box-shadow: 0 0 0 1px rgba(255, 253, 248, .86)
+  opacity: 0
+  transform: translate(-50%, -50%)
+  pointer-events: none
+  transition: width .12s ease, height .12s ease, opacity .12s ease
+
+  &.is-visible
+    opacity: 1
+
+.whiteboard-panel-toggle, .whiteboard-fullscreen-toggle
+  position: absolute
+  z-index: 6
+  bottom: 1rem
+  width: 3.25rem
+  height: 3.25rem
+  display: grid
+  place-items: center
+  padding: 0
+  border: 1px solid rgba(255, 253, 248, .32)
+  border-radius: .65rem
+  background: var(--ink)
+  color: var(--white)
+  box-shadow: 0 10px 28px rgba(7, 29, 51, .24)
+  -webkit-user-select: none
+  user-select: none
+
+  svg
+    width: 1.35rem
+    height: 1.35rem
+    fill: none
+    stroke: currentColor
+    stroke-width: 2
+    stroke-linecap: round
+    stroke-linejoin: round
+
+  &:hover, &:focus-visible
+    border-color: var(--gold)
+    color: var(--gold)
+
+  &[aria-pressed='true']
+    border-color: var(--gold)
+    background: var(--gold)
+    color: var(--ink)
+
+.whiteboard-fullscreen-toggle
+  right: 1rem
+
+  .whiteboard-fullscreen-toggle__collapse
+    display: none
+
+  &[aria-pressed='true']
+    .whiteboard-fullscreen-toggle__expand
+      display: none
+
+    .whiteboard-fullscreen-toggle__collapse
+      display: block
+
+.whiteboard-panel-toggle
+  right: 5rem
+  display: none
+
+  span
+    font-size: 1.3rem
+    line-height: 1
+
+.whiteboard-main:fullscreen .whiteboard-panel-toggle, .whiteboard-main.is-fullscreen-fallback .whiteboard-panel-toggle
+  display: grid
+
+.whiteboard-main.is-toolbar-hidden .whiteboard-panel-toggle
+  border-color: var(--gold)
+  background: var(--gold)
+  color: var(--ink)
 
 .whiteboard-board__hint
   position: absolute
@@ -325,8 +644,8 @@ button
 
 .whiteboard-status
   position: absolute
-  z-index: 3
-  right: 1rem
+  z-index: 4
+  right: 5rem
   bottom: 1rem
   max-width: min(28rem, calc(100% - 2rem))
   padding: .6rem .8rem
@@ -391,6 +710,9 @@ button
     gap: .65rem
     border-radius: .8rem
 
+  .whiteboard-tool-grid
+    grid-template-columns: repeat(2, 1fr)
+
   .whiteboard-board
     min-height: 420px
     border-radius: .8rem
@@ -398,6 +720,55 @@ button
   .whiteboard-board__hint
     top: .7rem
     font-size: .58rem
+
+  .whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
+    .whiteboard-toolbar
+      width: calc(100% - 5.75rem)
+      bottom: .5rem
+      left: calc(50% - 1.7rem)
+      padding: .55rem
+      display: grid
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, .9fr) minmax(0, 1fr)
+      gap: .45rem
+
+    .whiteboard-tool-grid
+      grid-template-columns: repeat(4, 1fr)
+      gap: .2rem
+
+    .whiteboard-tool
+      min-height: 2.35rem
+      font-size: .52rem
+
+      span:first-child
+        font-size: .85rem
+
+      span:last-child
+        display: none
+
+    .whiteboard-colors
+      gap: .25rem
+
+    .whiteboard-size-row
+      grid-template-columns: minmax(2.5rem, 1fr) 1.7rem
+      gap: .3rem
+
+      output
+        min-height: 1.8rem
+
+    .whiteboard-fullscreen-toggle
+      right: .5rem
+      bottom: .5rem
+
+    .whiteboard-panel-toggle
+      right: .5rem
+      bottom: 4.25rem
+
+    .whiteboard-status
+      right: .5rem
+      bottom: 8rem
+
+    .whiteboard-board__hint
+      display: none
 
 @media (prefers-reduced-motion: reduce)
   *, *::before, *::after

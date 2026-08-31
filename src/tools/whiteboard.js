@@ -57,7 +57,7 @@ root.innerHTML = `
         </fieldset>
 
         <div class="whiteboard-tool-group whiteboard-tool-group--stroke" data-panel-section="draw">
-          <label for="whiteboard-size">Stroke size</label>
+          <label id="whiteboard-size-label" for="whiteboard-size">Pen size</label>
           <div class="whiteboard-size-row">
             <input class="whiteboard-size" id="whiteboard-size" type="range" min="1" max="30" value="5" />
             <output for="whiteboard-size" id="whiteboard-size-output">5</output>
@@ -150,7 +150,18 @@ root.innerHTML = `
           <button id="whiteboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view"><span aria-hidden="true">↺</span></button>
           <button id="whiteboard-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
         </div>
-        <button class="whiteboard-panel-toggle" id="whiteboard-panel-toggle" type="button" aria-expanded="true" aria-controls="whiteboard-toolbar" aria-label="Hide settings panel" title="Hide settings">
+        <div class="whiteboard-fullscreen-actions" aria-label="Full-screen board actions">
+          <button id="whiteboard-fullscreen-undo" type="button" aria-label="Undo" title="Undo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7-5 5 5 5M5 12h8a6 6 0 0 1 6 6" /></svg>
+          </button>
+          <button id="whiteboard-fullscreen-redo" type="button" aria-label="Redo" title="Redo" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6" /></svg>
+          </button>
+          <button class="whiteboard-fullscreen-clear" id="whiteboard-fullscreen-clear" type="button" aria-label="Clear board" title="Clear board">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></svg>
+          </button>
+        </div>
+        <button class="whiteboard-panel-toggle" id="whiteboard-panel-toggle" type="button" aria-expanded="true" aria-controls="whiteboard-toolbar whiteboard-canvas-tabs" aria-label="Hide whiteboard controls" title="Hide controls">
           <span aria-hidden="true">✎</span>
         </button>
         <button class="whiteboard-fullscreen-toggle" id="whiteboard-fullscreen" type="button" aria-pressed="false" aria-label="Open full-screen whiteboard" title="Full screen">
@@ -169,6 +180,7 @@ const DATABASE_NAME = "math-1280-whiteboard";
 const DATABASE_VERSION = 1;
 const DATABASE_STORE = "projects";
 const DATABASE_PROJECT_KEY = "current-project";
+const DRAWING_TOOLS = ["pen", "highlighter", "eraser"];
 const board = document.querySelector("#whiteboard-board");
 const canvas = document.querySelector("#whiteboard-canvas");
 const context = canvas.getContext("2d");
@@ -189,6 +201,7 @@ const renameCanvasInput = document.querySelector("#whiteboard-canvas-name");
 const renameCanvasCancel = document.querySelector("#whiteboard-rename-cancel");
 const sizeInput = document.querySelector("#whiteboard-size");
 const sizeOutput = document.querySelector("#whiteboard-size-output");
+const sizeLabel = document.querySelector("#whiteboard-size-label");
 const smoothingButton = document.querySelector("#whiteboard-smoothing");
 const axisNumbersButton = document.querySelector("#whiteboard-axis-numbers");
 const axisSizeInput = document.querySelector("#whiteboard-axis-size");
@@ -200,6 +213,9 @@ const zoomResetButton = document.querySelector("#whiteboard-zoom-reset");
 const zoomInButton = document.querySelector("#whiteboard-zoom-in");
 const undoButton = document.querySelector("#whiteboard-undo");
 const redoButton = document.querySelector("#whiteboard-redo");
+const fullscreenUndoButton = document.querySelector("#whiteboard-fullscreen-undo");
+const fullscreenRedoButton = document.querySelector("#whiteboard-fullscreen-redo");
+const fullscreenClearButton = document.querySelector("#whiteboard-fullscreen-clear");
 const panelToggleButton = document.querySelector("#whiteboard-panel-toggle");
 const fullscreenButton = document.querySelector("#whiteboard-fullscreen");
 const saveButton = document.querySelector("#whiteboard-save");
@@ -259,8 +275,8 @@ function syncFullscreenMode() {
 function syncPanelVisibility() {
   const hidden = document.querySelector(".whiteboard-main").classList.contains("is-toolbar-hidden");
   panelToggleButton.setAttribute("aria-expanded", String(!hidden));
-  panelToggleButton.setAttribute("aria-label", hidden ? "Show settings panel" : "Hide settings panel");
-  panelToggleButton.title = hidden ? "Show settings" : "Hide settings";
+  panelToggleButton.setAttribute("aria-label", hidden ? "Show whiteboard controls" : "Hide whiteboard controls");
+  panelToggleButton.title = hidden ? "Show controls" : "Hide controls";
 }
 
 function togglePanelVisibility() {
@@ -334,7 +350,8 @@ function createInitialState() {
   return {
     tool: "pen",
     color: "#071d33",
-    size: 5,
+    toolSizes: normalizeToolSizes(),
+    lastDrawingTool: "pen",
     smooth: true,
     grid: "square",
     axisNumbers: true,
@@ -347,6 +364,23 @@ function createInitialState() {
     canvases: [firstCanvas],
     activeCanvasId: firstCanvas.id,
   };
+}
+
+function clampStrokeSize(value, fallback = 5) {
+  return Number.isFinite(Number(value)) ? Math.min(30, Math.max(1, Number(value))) : fallback;
+}
+
+function normalizeToolSizes(savedSizes, legacySize = 5) {
+  const fallback = clampStrokeSize(legacySize);
+  return Object.fromEntries(DRAWING_TOOLS.map((tool) => [tool, clampStrokeSize(savedSizes?.[tool], fallback)]));
+}
+
+function sizeControlTool() {
+  return DRAWING_TOOLS.includes(state.tool) ? state.tool : state.lastDrawingTool;
+}
+
+function toolSize(tool = sizeControlTool()) {
+  return clampStrokeSize(state.toolSizes?.[tool]);
 }
 
 function normalizeCanvasRecord(record, index) {
@@ -393,8 +427,37 @@ function applyCanvasState(canvasRecord) {
   axisLabelSignature = "";
   zoomSelection.classList.remove("is-visible");
   eraserPreview.classList.remove("is-visible");
+  resetClearConfirmation();
+}
+
+function resetClearConfirmation() {
+  window.clearTimeout(clearTimer);
+  clearTimer = null;
   clearButton.classList.remove("is-confirming");
   clearButton.textContent = "Clear board";
+  fullscreenClearButton.classList.remove("is-confirming");
+  fullscreenClearButton.setAttribute("aria-label", "Clear board");
+  fullscreenClearButton.title = "Clear board";
+}
+
+function requestClearBoard() {
+  if (!clearButton.classList.contains("is-confirming")) {
+    clearButton.classList.add("is-confirming");
+    clearButton.textContent = "Click again to clear";
+    fullscreenClearButton.classList.add("is-confirming");
+    fullscreenClearButton.setAttribute("aria-label", "Confirm clearing the board");
+    fullscreenClearButton.title = "Click again to clear";
+    announce("Press clear again to erase the whole board.");
+    window.clearTimeout(clearTimer);
+    clearTimer = window.setTimeout(resetClearConfirmation, 3000);
+    return;
+  }
+  state.strokes = [];
+  redoStack = [];
+  resetClearConfirmation();
+  saveState();
+  renderBoard();
+  announce("Whiteboard cleared.");
 }
 
 function syncCanvasTabs() {
@@ -689,10 +752,15 @@ function hydrateState(saved) {
     ? saved.canvases.map(normalizeCanvasRecord)
     : [createCanvasRecord("Canvas 1", saved)];
   const activeCanvas = savedCanvases.find((item) => item.id === saved.activeCanvasId) || savedCanvases[0];
+  const restoredTool = ["pen", "highlighter", "eraser", "hand", "zoom"].includes(saved.tool) ? saved.tool : state.tool;
+  const lastDrawingTool = DRAWING_TOOLS.includes(saved.lastDrawingTool)
+    ? saved.lastDrawingTool
+    : (DRAWING_TOOLS.includes(restoredTool) ? restoredTool : "pen");
   state = {
-    tool: ["pen", "highlighter", "eraser", "hand", "zoom"].includes(saved.tool) ? saved.tool : state.tool,
+    tool: restoredTool,
     color: typeof saved.color === "string" ? saved.color : state.color,
-    size: Number.isFinite(Number(saved.size)) ? Math.min(30, Math.max(1, Number(saved.size))) : state.size,
+    toolSizes: normalizeToolSizes(saved.toolSizes, saved.size),
+    lastDrawingTool,
     smooth: saved.smooth !== false,
     grid: activeCanvas.grid,
     axisNumbers: activeCanvas.axisNumbers,
@@ -751,8 +819,11 @@ function syncControls() {
   toolButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.tool === state.tool)));
   colorButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.color === state.color)));
   gridButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.grid === state.grid)));
-  sizeInput.value = state.size;
-  sizeOutput.value = state.size;
+  const activeSizeTool = sizeControlTool();
+  const activeToolSize = toolSize(activeSizeTool);
+  sizeInput.value = activeToolSize;
+  sizeOutput.value = activeToolSize;
+  sizeLabel.textContent = `${activeSizeTool === "highlighter" ? "Highlighter" : activeSizeTool[0].toUpperCase() + activeSizeTool.slice(1)} size`;
   smoothingButton.setAttribute("aria-pressed", String(state.smooth));
   axisNumbersButton.setAttribute("aria-pressed", String(state.axisNumbers));
   axisNumbersButton.disabled = state.grid !== "coordinate";
@@ -781,6 +852,8 @@ function syncControls() {
   zoomResetButton.setAttribute("aria-label", `Reset zoom and center canvas. Current zoom ${Math.round(state.zoom * 100)}%.`);
   undoButton.disabled = state.strokes.length === 0;
   redoButton.disabled = redoStack.length === 0;
+  fullscreenUndoButton.disabled = state.strokes.length === 0;
+  fullscreenRedoButton.disabled = redoStack.length === 0;
 }
 
 function coordinateLabelInterval(zoom = state.zoom) {
@@ -986,7 +1059,7 @@ function updateEraserPreview(event) {
     return;
   }
   const bounds = board.getBoundingClientRect();
-  const diameter = strokeWidth(activeStroke || { tool: "eraser", size: state.size }) * state.zoom;
+  const diameter = strokeWidth(activeStroke || { tool: "eraser", size: toolSize("eraser") }) * state.zoom;
   eraserPreview.style.setProperty("--eraser-diameter", `${diameter}px`);
   eraserPreview.style.left = `${event.clientX - bounds.left}px`;
   eraserPreview.style.top = `${event.clientY - bounds.top}px`;
@@ -1121,10 +1194,11 @@ function startStroke(event) {
     event.preventDefault();
     return;
   }
+  const strokeTool = usingPenEraser ? "eraser" : state.tool;
   activeStroke = {
-    tool: usingPenEraser ? "eraser" : state.tool,
+    tool: strokeTool,
     color: state.color,
-    size: state.size,
+    size: toolSize(strokeTool),
     smooth: state.smooth,
     pointerType: activePointerType,
     points: [normalizedPoint(event)],
@@ -1415,7 +1489,9 @@ function projectPayload() {
     settings: {
       tool: state.tool,
       color: state.color,
-      size: state.size,
+      size: toolSize(),
+      toolSizes: state.toolSizes,
+      lastDrawingTool: state.lastDrawingTool,
       smooth: state.smooth,
       panelTab: state.panelTab,
     },
@@ -1582,7 +1658,12 @@ async function importProject(file) {
     const importedSettings = project.settings || {};
     if (["pen", "highlighter", "eraser", "hand", "zoom"].includes(importedSettings.tool)) state.tool = importedSettings.tool;
     if (typeof importedSettings.color === "string") state.color = importedSettings.color.slice(0, 64);
-    if (Number.isFinite(Number(importedSettings.size))) state.size = Math.min(30, Math.max(1, Number(importedSettings.size)));
+    if (importedSettings.toolSizes || Number.isFinite(Number(importedSettings.size))) {
+      state.toolSizes = normalizeToolSizes(importedSettings.toolSizes, importedSettings.size);
+    }
+    state.lastDrawingTool = DRAWING_TOOLS.includes(importedSettings.lastDrawingTool)
+      ? importedSettings.lastDrawingTool
+      : (DRAWING_TOOLS.includes(state.tool) ? state.tool : state.lastDrawingTool);
     state.smooth = importedSettings.smooth !== false;
     if (["draw", "canvas"].includes(importedSettings.panelTab)) state.panelTab = importedSettings.panelTab;
     applyCanvasState(state.canvases.find((item) => item.id === importedActiveId));
@@ -1601,6 +1682,7 @@ async function importProject(file) {
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     state.tool = button.dataset.tool;
+    if (DRAWING_TOOLS.includes(state.tool)) state.lastDrawingTool = state.tool;
     syncControls();
     saveState();
     announce(`${button.textContent.trim()} selected.`);
@@ -1611,6 +1693,7 @@ colorButtons.forEach((button) => {
   button.addEventListener("click", () => {
     state.color = button.dataset.color;
     state.tool = ["eraser", "hand", "zoom"].includes(state.tool) ? "pen" : state.tool;
+    if (DRAWING_TOOLS.includes(state.tool)) state.lastDrawingTool = state.tool;
     setPressed(colorButtons, button);
     syncControls();
     saveState();
@@ -1812,9 +1895,10 @@ axisSizeInput.addEventListener("input", () => {
 });
 
 sizeInput.addEventListener("input", () => {
-  state.size = Number(sizeInput.value);
-  sizeOutput.value = state.size;
-  eraserPreview.style.setProperty("--eraser-diameter", `${strokeWidth({ tool: "eraser", size: state.size }) * state.zoom}px`);
+  const activeSizeTool = sizeControlTool();
+  state.toolSizes[activeSizeTool] = Number(sizeInput.value);
+  sizeOutput.value = state.toolSizes[activeSizeTool];
+  eraserPreview.style.setProperty("--eraser-diameter", `${strokeWidth({ tool: "eraser", size: toolSize("eraser") }) * state.zoom}px`);
   saveState();
 });
 
@@ -1827,6 +1911,9 @@ smoothingButton.addEventListener("click", () => {
 
 undoButton.addEventListener("click", undo);
 redoButton.addEventListener("click", redo);
+fullscreenUndoButton.addEventListener("click", undo);
+fullscreenRedoButton.addEventListener("click", redo);
+fullscreenClearButton.addEventListener("click", requestClearBoard);
 fullscreenButton.addEventListener("click", toggleFullscreenMode);
 panelToggleButton.addEventListener("click", togglePanelVisibility);
 zoomOutButton.addEventListener("click", zoomOut);
@@ -1842,26 +1929,7 @@ importProjectButton.addEventListener("click", () => {
   projectFileInput.click();
 });
 projectFileInput.addEventListener("change", () => importProject(projectFileInput.files?.[0]));
-clearButton.addEventListener("click", () => {
-  if (!clearButton.classList.contains("is-confirming")) {
-    clearButton.classList.add("is-confirming");
-    clearButton.textContent = "Click again to clear";
-    announce("Press clear again to erase the whole board.");
-    window.clearTimeout(clearTimer);
-    clearTimer = window.setTimeout(() => {
-      clearButton.classList.remove("is-confirming");
-      clearButton.textContent = "Clear board";
-    }, 3000);
-    return;
-  }
-  state.strokes = [];
-  redoStack = [];
-  clearButton.classList.remove("is-confirming");
-  clearButton.textContent = "Clear board";
-  saveState();
-  renderBoard();
-  announce("Whiteboard cleared.");
-});
+clearButton.addEventListener("click", requestClearBoard);
 
 canvas.addEventListener("pointerdown", startStroke);
 canvas.addEventListener("pointerenter", updateEraserPreview);

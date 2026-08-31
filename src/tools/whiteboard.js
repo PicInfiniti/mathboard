@@ -82,8 +82,8 @@ root.innerHTML = `
           <label class="whiteboard-axis-size" for="whiteboard-axis-size">
             <span>Number size</span>
             <span class="whiteboard-axis-size__control">
-              <input id="whiteboard-axis-size" type="range" min="8" max="30" value="9" disabled />
-              <output id="whiteboard-axis-size-output" for="whiteboard-axis-size">9</output>
+              <input id="whiteboard-axis-size" type="range" min="12" max="30" value="13" disabled />
+              <output id="whiteboard-axis-size-output" for="whiteboard-axis-size">13</output>
             </span>
           </label>
         </fieldset>
@@ -338,7 +338,7 @@ function createCanvasRecord(name, source = {}) {
     strokes: Array.isArray(source.strokes) ? source.strokes : [],
     grid: ["blank", "square", "coordinate"].includes(source.grid) ? source.grid : "square",
     axisNumbers: source.axisNumbers !== false,
-    axisFontSize: Number.isFinite(Number(source.axisFontSize)) ? Math.min(30, Math.max(8, Number(source.axisFontSize))) : 9,
+    axisFontSize: Number.isFinite(Number(source.axisFontSize)) ? Math.min(30, Math.max(12, Number(source.axisFontSize))) : 13,
     zoom: Number.isFinite(Number(source.zoom)) ? Math.min(8, Math.max(1, Number(source.zoom))) : 1,
     panX: Number.isFinite(Number(source.panX)) ? Number(source.panX) : 0,
     panY: Number.isFinite(Number(source.panY)) ? Number(source.panY) : 0,
@@ -355,7 +355,7 @@ function createInitialState() {
     smooth: true,
     grid: "square",
     axisNumbers: true,
-    axisFontSize: 9,
+    axisFontSize: 13,
     panelTab: "draw",
     zoom: 1,
     panX: 0,

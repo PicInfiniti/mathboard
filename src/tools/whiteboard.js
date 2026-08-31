@@ -181,6 +181,9 @@ const DATABASE_VERSION = 1;
 const DATABASE_STORE = "projects";
 const DATABASE_PROJECT_KEY = "current-project";
 const DRAWING_TOOLS = ["pen", "highlighter", "eraser"];
+const ZOOM_LEVELS = [.25, .35, .5, .65, .8, .9, 1, 1.5, 2.25, 3.375, 5.0625, 7.59375, 8];
+const MIN_ZOOM = ZOOM_LEVELS[0];
+const MAX_ZOOM = ZOOM_LEVELS.at(-1);
 const board = document.querySelector("#whiteboard-board");
 const canvas = document.querySelector("#whiteboard-canvas");
 const context = canvas.getContext("2d");
@@ -339,7 +342,7 @@ function createCanvasRecord(name, source = {}) {
     grid: ["blank", "square", "coordinate"].includes(source.grid) ? source.grid : "square",
     axisNumbers: source.axisNumbers !== false,
     axisFontSize: Number.isFinite(Number(source.axisFontSize)) ? Math.min(30, Math.max(12, Number(source.axisFontSize))) : 13,
-    zoom: Number.isFinite(Number(source.zoom)) ? Math.min(8, Math.max(1, Number(source.zoom))) : 1,
+    zoom: Number.isFinite(Number(source.zoom)) ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(source.zoom))) : 1,
     panX: Number.isFinite(Number(source.panX)) ? Number(source.panX) : 0,
     panY: Number.isFinite(Number(source.panY)) ? Number(source.panY) : 0,
   };
@@ -847,8 +850,8 @@ function syncControls() {
   board.classList.toggle("is-zoomed-precision", state.zoom >= 1.5);
   syncAxisLabels();
   board.classList.toggle("has-ink", state.strokes.length > 0);
-  zoomOutButton.disabled = state.zoom <= 1;
-  zoomInButton.disabled = state.zoom >= 8;
+  zoomOutButton.disabled = state.zoom <= MIN_ZOOM;
+  zoomInButton.disabled = state.zoom >= MAX_ZOOM;
   zoomResetButton.setAttribute("aria-label", `Reset zoom and center canvas. Current zoom ${Math.round(state.zoom * 100)}%.`);
   undoButton.disabled = state.strokes.length === 0;
   redoButton.disabled = redoStack.length === 0;
@@ -861,7 +864,7 @@ function coordinateLabelInterval(zoom = state.zoom) {
   if (zoom >= 4) interval = 0.25;
   else if (zoom >= 2.5) interval = 0.5;
   else if (zoom >= 1.5) interval = 1;
-  while ((32 * zoom * interval) < (state.axisFontSize * 3.2) && interval < 2) interval *= 2;
+  while ((32 * zoom * interval) < (state.axisFontSize * 3.2) && interval < 32) interval *= 2;
   return interval;
 }
 
@@ -1114,7 +1117,7 @@ function applyZoomSelection(selection) {
   const worldOffsetX = (centerX - (bounds.width / 2) - state.panX) / state.zoom;
   const worldOffsetY = (centerY - (bounds.height / 2) - state.panY) / state.zoom;
   const fitFactor = Math.min(bounds.width / width, bounds.height / height) * 0.9;
-  const nextZoom = Math.min(8, Math.max(state.zoom, state.zoom * fitFactor));
+  const nextZoom = Math.min(MAX_ZOOM, Math.max(state.zoom, state.zoom * fitFactor));
   state.zoom = nextZoom;
   state.panX = -worldOffsetX * nextZoom;
   state.panY = -worldOffsetY * nextZoom;
@@ -1125,9 +1128,15 @@ function applyZoomSelection(selection) {
 }
 
 function zoomOut() {
-  if (state.zoom <= 1) return;
+  if (state.zoom <= MIN_ZOOM) return;
   const previousZoom = state.zoom;
-  const nextZoom = Math.max(1, previousZoom / 1.5);
+  let nextZoom = MIN_ZOOM;
+  for (let index = ZOOM_LEVELS.length - 1; index >= 0; index -= 1) {
+    if (ZOOM_LEVELS[index] < previousZoom - .001) {
+      nextZoom = ZOOM_LEVELS[index];
+      break;
+    }
+  }
   const ratio = nextZoom / previousZoom;
   state.zoom = nextZoom;
   state.panX *= ratio;
@@ -1139,9 +1148,15 @@ function zoomOut() {
 }
 
 function zoomIn() {
-  if (state.zoom >= 8) return;
+  if (state.zoom >= MAX_ZOOM) return;
   const previousZoom = state.zoom;
-  const nextZoom = Math.min(8, previousZoom * 1.5);
+  let nextZoom = MAX_ZOOM;
+  for (const level of ZOOM_LEVELS) {
+    if (level > previousZoom + .001) {
+      nextZoom = level;
+      break;
+    }
+  }
   const ratio = nextZoom / previousZoom;
   state.zoom = nextZoom;
   state.panX *= ratio;

@@ -92,19 +92,34 @@ root.innerHTML = `
           <p class="whiteboard-history__title">Board actions</p>
           <button class="whiteboard-action" id="whiteboard-undo" type="button" disabled>Undo</button>
           <button class="whiteboard-action" id="whiteboard-redo" type="button" disabled>Redo</button>
-          <button class="whiteboard-action whiteboard-action--save" id="whiteboard-save" type="button">Download PNG</button>
-          <button class="whiteboard-action whiteboard-action--pdf" id="whiteboard-pdf" type="button">Download PDF</button>
-          <details class="whiteboard-project-menu" id="whiteboard-project-menu">
-            <summary>Project</summary>
-            <div aria-label="Project actions">
-              <button id="whiteboard-project-new" type="button"><span aria-hidden="true">＋</span>New clean project</button>
-              <button id="whiteboard-project-export" type="button"><span aria-hidden="true">⇩</span>Export project</button>
-              <button id="whiteboard-project-import" type="button"><span aria-hidden="true">⇧</span>Import project</button>
-              <button id="whiteboard-project-share" type="button"><span aria-hidden="true">↗</span>Share project</button>
-              <input id="whiteboard-project-file" type="file" accept=".mathboard,.json,application/json" hidden />
-            </div>
-          </details>
-          <button class="whiteboard-action whiteboard-action--clear" id="whiteboard-clear" type="button">Clear board</button>
+          <button class="whiteboard-action" id="whiteboard-history-toggle" type="button" aria-expanded="false" aria-controls="whiteboard-history-scrubber" disabled>History</button>
+          <div class="whiteboard-file-actions" aria-label="Save and project actions">
+            <button class="whiteboard-icon-action whiteboard-action--save" id="whiteboard-save" type="button" aria-label="Download PNG" data-tooltip="Save this canvas as a PNG image">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10M8.5 9.5 12 13l3.5-3.5M5 16v4h14v-4" /></svg>
+              <span class="whiteboard-icon-action__label">Download PNG</span>
+            </button>
+            <button class="whiteboard-icon-action whiteboard-action--pdf" id="whiteboard-pdf" type="button" aria-label="Download PDF" data-tooltip="Save this canvas as a printable PDF">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h4" /></svg>
+              <span class="whiteboard-icon-action__label">Download PDF</span>
+            </button>
+            <details class="whiteboard-project-menu" id="whiteboard-project-menu">
+              <summary class="whiteboard-icon-action" aria-label="Project options" data-tooltip="Create, import, export, or share a project">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3zM3 7V5h6l2 2" /></svg>
+                <span class="whiteboard-icon-action__label">Project</span>
+              </summary>
+              <div aria-label="Project actions">
+                <button id="whiteboard-project-new" type="button"><span aria-hidden="true">＋</span>New clean project</button>
+                <button id="whiteboard-project-export" type="button"><span aria-hidden="true">⇩</span>Export project</button>
+                <button id="whiteboard-project-import" type="button"><span aria-hidden="true">⇧</span>Import project</button>
+                <button id="whiteboard-project-share" type="button"><span aria-hidden="true">↗</span>Share project</button>
+                <input id="whiteboard-project-file" type="file" accept=".mathboard,.json,application/json" hidden />
+              </div>
+            </details>
+            <button class="whiteboard-icon-action whiteboard-action--clear" id="whiteboard-clear" type="button" aria-label="Clear board" data-tooltip="Remove every stroke from this canvas">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></svg>
+              <span class="whiteboard-icon-action__label">Clear board</span>
+            </button>
+          </div>
         </div>
 
         <details class="whiteboard-help">
@@ -150,12 +165,33 @@ root.innerHTML = `
           <button id="whiteboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view"><span aria-hidden="true">↺</span></button>
           <button id="whiteboard-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
         </div>
+        <section class="whiteboard-history-scrubber" id="whiteboard-history-scrubber" aria-label="Stroke history" aria-hidden="true">
+          <div class="whiteboard-history-scrubber__header">
+            <div><strong>Stroke history</strong><span>Travel without clearing the board</span></div>
+            <button id="whiteboard-history-close" type="button" aria-label="Close stroke history" title="Close history">×</button>
+          </div>
+          <div class="whiteboard-history-scrubber__controls">
+            <button id="whiteboard-history-start" type="button" aria-label="Jump to the beginning" title="Beginning" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-7 6 7 6" /></svg>
+            </button>
+            <label for="whiteboard-history-range">
+              <input id="whiteboard-history-range" type="range" min="0" max="0" value="0" aria-label="Visible stroke" disabled />
+            </label>
+            <button id="whiteboard-history-end" type="button" aria-label="Jump to the latest stroke" title="Latest" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l7 6-7 6" /></svg>
+            </button>
+          </div>
+          <output id="whiteboard-history-output" for="whiteboard-history-range">No strokes yet</output>
+        </section>
         <div class="whiteboard-fullscreen-actions" aria-label="Full-screen board actions">
           <button id="whiteboard-fullscreen-undo" type="button" aria-label="Undo" title="Undo" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 7-5 5 5 5M5 12h8a6 6 0 0 1 6 6" /></svg>
           </button>
           <button id="whiteboard-fullscreen-redo" type="button" aria-label="Redo" title="Redo" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6" /></svg>
+          </button>
+          <button id="whiteboard-fullscreen-history" type="button" aria-label="Open stroke history" aria-expanded="false" aria-controls="whiteboard-history-scrubber" title="Stroke history" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7M4 4v4.7h4.7M12 7v5l3 2" /></svg>
           </button>
           <button class="whiteboard-fullscreen-clear" id="whiteboard-fullscreen-clear" type="button" aria-label="Clear board" title="Clear board">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" /></svg>
@@ -216,9 +252,17 @@ const zoomResetButton = document.querySelector("#whiteboard-zoom-reset");
 const zoomInButton = document.querySelector("#whiteboard-zoom-in");
 const undoButton = document.querySelector("#whiteboard-undo");
 const redoButton = document.querySelector("#whiteboard-redo");
+const historyToggleButton = document.querySelector("#whiteboard-history-toggle");
 const fullscreenUndoButton = document.querySelector("#whiteboard-fullscreen-undo");
 const fullscreenRedoButton = document.querySelector("#whiteboard-fullscreen-redo");
+const fullscreenHistoryButton = document.querySelector("#whiteboard-fullscreen-history");
 const fullscreenClearButton = document.querySelector("#whiteboard-fullscreen-clear");
+const historyScrubber = document.querySelector("#whiteboard-history-scrubber");
+const historyCloseButton = document.querySelector("#whiteboard-history-close");
+const historyStartButton = document.querySelector("#whiteboard-history-start");
+const historyEndButton = document.querySelector("#whiteboard-history-end");
+const historyRange = document.querySelector("#whiteboard-history-range");
+const historyOutput = document.querySelector("#whiteboard-history-output");
 const panelToggleButton = document.querySelector("#whiteboard-panel-toggle");
 const fullscreenButton = document.querySelector("#whiteboard-fullscreen");
 const saveButton = document.querySelector("#whiteboard-save");
@@ -255,6 +299,10 @@ let draggedCanvasId = null;
 let tabPointerReorder = null;
 let tabPointerReorderTimer = null;
 let suppressCanvasTabClick = false;
+let historyHoldTimer = null;
+let historyRepeatTimer = null;
+let historyHoldCount = 0;
+let suppressHistoryClick = false;
 
 function isFullscreenMode() {
   const main = document.querySelector(".whiteboard-main");
@@ -285,6 +333,22 @@ function syncPanelVisibility() {
 function togglePanelVisibility() {
   document.querySelector(".whiteboard-main").classList.toggle("is-toolbar-hidden");
   syncPanelVisibility();
+}
+
+function setHistoryScrubberVisibility(visible) {
+  const canOpen = state.strokes.length + redoStack.length > 0;
+  const isVisible = Boolean(visible && canOpen);
+  historyScrubber.classList.toggle("is-visible", isVisible);
+  historyScrubber.setAttribute("aria-hidden", String(!isVisible));
+  historyToggleButton.setAttribute("aria-expanded", String(isVisible));
+  fullscreenHistoryButton.setAttribute("aria-expanded", String(isVisible));
+  fullscreenHistoryButton.setAttribute("aria-label", isVisible ? "Close stroke history" : "Open stroke history");
+  fullscreenHistoryButton.title = isVisible ? "Close history" : "Stroke history";
+}
+
+function toggleHistoryScrubber() {
+  setHistoryScrubberVisibility(!historyScrubber.classList.contains("is-visible"));
+  if (historyScrubber.classList.contains("is-visible")) historyRange.focus({ preventScroll: true });
 }
 
 function syncPanelTabs() {
@@ -339,6 +403,7 @@ function createCanvasRecord(name, source = {}) {
     id,
     name,
     strokes: Array.isArray(source.strokes) ? source.strokes : [],
+    redoStrokes: Array.isArray(source.redoStrokes) ? source.redoStrokes : [],
     grid: ["blank", "square", "coordinate"].includes(source.grid) ? source.grid : "square",
     axisNumbers: source.axisNumbers !== false,
     axisFontSize: Number.isFinite(Number(source.axisFontSize)) ? Math.min(30, Math.max(12, Number(source.axisFontSize))) : 13,
@@ -404,6 +469,7 @@ function syncActiveCanvasState() {
   if (!activeCanvas) return;
   Object.assign(activeCanvas, {
     strokes: state.strokes,
+    redoStrokes: redoStack,
     grid: state.grid,
     axisNumbers: state.axisNumbers,
     axisFontSize: state.axisFontSize,
@@ -421,7 +487,7 @@ function applyCanvasState(canvasRecord) {
   state.zoom = canvasRecord.zoom;
   state.panX = canvasRecord.panX;
   state.panY = canvasRecord.panY;
-  redoStack = [];
+  redoStack = Array.isArray(canvasRecord.redoStrokes) ? canvasRecord.redoStrokes : [];
   activeStroke = null;
   activePan = null;
   activeZoomSelection = null;
@@ -437,7 +503,8 @@ function resetClearConfirmation() {
   window.clearTimeout(clearTimer);
   clearTimer = null;
   clearButton.classList.remove("is-confirming");
-  clearButton.textContent = "Clear board";
+  clearButton.setAttribute("aria-label", "Clear board");
+  clearButton.dataset.tooltip = "Remove every stroke from this canvas";
   fullscreenClearButton.classList.remove("is-confirming");
   fullscreenClearButton.setAttribute("aria-label", "Clear board");
   fullscreenClearButton.title = "Clear board";
@@ -446,7 +513,8 @@ function resetClearConfirmation() {
 function requestClearBoard() {
   if (!clearButton.classList.contains("is-confirming")) {
     clearButton.classList.add("is-confirming");
-    clearButton.textContent = "Click again to clear";
+    clearButton.setAttribute("aria-label", "Confirm clearing the board");
+    clearButton.dataset.tooltip = "Press again to clear every stroke";
     fullscreenClearButton.classList.add("is-confirming");
     fullscreenClearButton.setAttribute("aria-label", "Confirm clearing the board");
     fullscreenClearButton.title = "Click again to clear";
@@ -529,6 +597,7 @@ function duplicateActiveCanvas() {
   const duplicate = createCanvasRecord(duplicateName, {
     ...activeCanvas,
     strokes: JSON.parse(JSON.stringify(activeCanvas.strokes)),
+    redoStrokes: JSON.parse(JSON.stringify(activeCanvas.redoStrokes)),
   });
   const activeIndex = state.canvases.findIndex((item) => item.id === activeCanvas.id);
   state.canvases.splice(activeIndex + 1, 0, duplicate);
@@ -776,6 +845,7 @@ function hydrateState(saved) {
     canvases: savedCanvases,
     activeCanvasId: activeCanvas.id,
   };
+  redoStack = activeCanvas.redoStrokes;
   return true;
 }
 
@@ -816,6 +886,26 @@ async function loadState() {
   setSaveStatus("saved", useLocalStorageFallback ? "Saved with limited storage" : "Saved in this browser");
 }
 
+function syncHistoryControls() {
+  const current = state.strokes.length;
+  const total = current + redoStack.length;
+  const hasHistory = total > 0;
+  historyRange.max = total;
+  historyRange.value = current;
+  historyRange.disabled = !hasHistory;
+  historyRange.setAttribute("aria-valuetext", hasHistory ? `${current} of ${total} strokes visible` : "No strokes");
+  historyOutput.value = hasHistory ? `${current} of ${total} ${total === 1 ? "stroke" : "strokes"}` : "No strokes yet";
+  historyStartButton.disabled = current === 0;
+  historyEndButton.disabled = redoStack.length === 0;
+  historyToggleButton.disabled = !hasHistory;
+  fullscreenHistoryButton.disabled = !hasHistory;
+  undoButton.disabled = current === 0;
+  redoButton.disabled = redoStack.length === 0;
+  fullscreenUndoButton.disabled = current === 0;
+  fullscreenRedoButton.disabled = redoStack.length === 0;
+  if (!hasHistory) setHistoryScrubberVisibility(false);
+}
+
 function syncControls() {
   syncPanelTabs();
   syncCanvasTabs();
@@ -853,10 +943,7 @@ function syncControls() {
   zoomOutButton.disabled = state.zoom <= MIN_ZOOM;
   zoomInButton.disabled = state.zoom >= MAX_ZOOM;
   zoomResetButton.setAttribute("aria-label", `Reset zoom and center canvas. Current zoom ${Math.round(state.zoom * 100)}%.`);
-  undoButton.disabled = state.strokes.length === 0;
-  redoButton.disabled = redoStack.length === 0;
-  fullscreenUndoButton.disabled = state.strokes.length === 0;
-  fullscreenRedoButton.disabled = redoStack.length === 0;
+  syncHistoryControls();
 }
 
 function coordinateLabelInterval(zoom = state.zoom) {
@@ -1290,22 +1377,81 @@ function setPressed(buttons, activeButton) {
   buttons.forEach((button) => button.setAttribute("aria-pressed", String(button === activeButton)));
 }
 
-function undo() {
-  const stroke = state.strokes.pop();
-  if (!stroke) return;
-  redoStack.push(stroke);
+function setHistoryPosition(requestedPosition, shouldAnnounce = true) {
+  const total = state.strokes.length + redoStack.length;
+  const numericPosition = Number(requestedPosition);
+  if (!Number.isFinite(numericPosition)) return false;
+  const target = Math.min(total, Math.max(0, Math.round(numericPosition)));
+  if (target === state.strokes.length) return false;
+  while (state.strokes.length > target) redoStack.push(state.strokes.pop());
+  while (state.strokes.length < target && redoStack.length) state.strokes.push(redoStack.pop());
   saveState();
   renderBoard();
-  announce("Last stroke undone.");
+  if (shouldAnnounce) announce(`History ${state.strokes.length} of ${total}.`);
+  return true;
 }
 
-function redo() {
-  const stroke = redoStack.pop();
-  if (!stroke) return;
-  state.strokes.push(stroke);
-  saveState();
-  renderBoard();
-  announce("Stroke restored.");
+function undo(shouldAnnounce = true) {
+  return setHistoryPosition(state.strokes.length - 1, shouldAnnounce);
+}
+
+function redo(shouldAnnounce = true) {
+  return setHistoryPosition(state.strokes.length + 1, shouldAnnounce);
+}
+
+function stopHistoryHold(shouldAnnounce = true) {
+  window.clearTimeout(historyHoldTimer);
+  window.clearTimeout(historyRepeatTimer);
+  historyHoldTimer = null;
+  historyRepeatTimer = null;
+  const repeatedSteps = historyHoldCount;
+  historyHoldCount = 0;
+  if (shouldAnnounce && repeatedSteps > 0) announce(`History ${state.strokes.length} of ${state.strokes.length + redoStack.length}.`);
+}
+
+function startHistoryHold(event, direction) {
+  if (event.button !== 0 || event.currentTarget.disabled) return;
+  if (typeof event.currentTarget.setPointerCapture === "function") event.currentTarget.setPointerCapture(event.pointerId);
+  stopHistoryHold(false);
+  suppressHistoryClick = false;
+  const repeat = () => {
+    const moved = direction < 0 ? undo(false) : redo(false);
+    if (!moved) {
+      stopHistoryHold();
+      return;
+    }
+    historyHoldCount += 1;
+    suppressHistoryClick = true;
+    const delay = Math.max(55, 165 - (historyHoldCount * 12));
+    historyRepeatTimer = window.setTimeout(repeat, delay);
+  };
+  historyHoldTimer = window.setTimeout(repeat, 420);
+}
+
+function finishHistoryHold() {
+  stopHistoryHold();
+  if (suppressHistoryClick) {
+    window.setTimeout(() => {
+      suppressHistoryClick = false;
+    }, 0);
+  }
+}
+
+function bindHistoryStepButton(button, direction) {
+  button.addEventListener("pointerdown", (event) => startHistoryHold(event, direction));
+  button.addEventListener("pointerup", finishHistoryHold);
+  button.addEventListener("pointercancel", finishHistoryHold);
+  button.addEventListener("lostpointercapture", finishHistoryHold);
+  button.addEventListener("contextmenu", (event) => event.preventDefault());
+  button.addEventListener("click", (event) => {
+    if (suppressHistoryClick) {
+      suppressHistoryClick = false;
+      event.preventDefault();
+      return;
+    }
+    if (direction < 0) undo();
+    else redo();
+  });
 }
 
 function drawExportBackground(targetContext, width, height) {
@@ -1648,6 +1794,7 @@ async function importProject(file) {
     const currentIsEmpty = state.canvases.length === 1
       && currentCanvas.name === "Canvas 1"
       && state.strokes.length === 0
+      && redoStack.length === 0
       && state.grid === "square"
       && state.zoom === 1
       && state.panX === 0
@@ -1659,7 +1806,10 @@ async function importProject(file) {
       const strokes = Array.isArray(source?.strokes)
         ? source.strokes.slice(0, 50000).map((stroke) => sanitizeImportedStroke(stroke, pointBudget)).filter(Boolean)
         : [];
-      const canvasRecord = normalizeCanvasRecord({ ...source, strokes }, index);
+      const redoStrokes = Array.isArray(source?.redoStrokes)
+        ? source.redoStrokes.slice(0, 50000).map((stroke) => sanitizeImportedStroke(stroke, pointBudget)).filter(Boolean)
+        : [];
+      const canvasRecord = normalizeCanvasRecord({ ...source, strokes, redoStrokes }, index);
       const originalId = canvasRecord.id;
       canvasRecord.id = createCanvasRecord(canvasRecord.name).id;
       canvasRecord.name = uniqueImportedName(canvasRecord.name, usedNames);
@@ -1924,10 +2074,17 @@ smoothingButton.addEventListener("click", () => {
   announce(`Smooth curves ${state.smooth ? "enabled" : "disabled"}.`);
 });
 
-undoButton.addEventListener("click", undo);
-redoButton.addEventListener("click", redo);
-fullscreenUndoButton.addEventListener("click", undo);
-fullscreenRedoButton.addEventListener("click", redo);
+bindHistoryStepButton(undoButton, -1);
+bindHistoryStepButton(redoButton, 1);
+bindHistoryStepButton(fullscreenUndoButton, -1);
+bindHistoryStepButton(fullscreenRedoButton, 1);
+historyToggleButton.addEventListener("click", toggleHistoryScrubber);
+fullscreenHistoryButton.addEventListener("click", toggleHistoryScrubber);
+historyCloseButton.addEventListener("click", () => setHistoryScrubberVisibility(false));
+historyStartButton.addEventListener("click", () => setHistoryPosition(0));
+historyEndButton.addEventListener("click", () => setHistoryPosition(state.strokes.length + redoStack.length));
+historyRange.addEventListener("input", () => setHistoryPosition(historyRange.value, false));
+historyRange.addEventListener("change", () => announce(`History ${state.strokes.length} of ${state.strokes.length + redoStack.length}.`));
 fullscreenClearButton.addEventListener("click", requestClearBoard);
 fullscreenButton.addEventListener("click", toggleFullscreenMode);
 panelToggleButton.addEventListener("click", togglePanelVisibility);
@@ -1989,6 +2146,11 @@ document.addEventListener("keydown", (event) => {
     zoomSelection.classList.remove("is-visible");
     if (pointerId !== null && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
     announce("Zoom selection cancelled.");
+    return;
+  }
+  if (event.key === "Escape" && historyScrubber.classList.contains("is-visible")) {
+    setHistoryScrubberVisibility(false);
+    (isFullscreenMode() ? fullscreenHistoryButton : historyToggleButton).focus({ preventScroll: true });
     return;
   }
   if (event.key === "Escape" && document.querySelector(".whiteboard-main").classList.contains("is-fullscreen-fallback")) {

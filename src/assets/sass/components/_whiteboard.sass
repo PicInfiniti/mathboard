@@ -480,7 +480,7 @@ button
   letter-spacing: .13em
   text-transform: uppercase
 
-.whiteboard-action, .whiteboard-project-menu > summary
+.whiteboard-action
   min-height: 2.45rem
   padding: .4rem .3rem
   display: flex
@@ -512,22 +512,117 @@ button
 #whiteboard-redo::before
   content: '↷'
 
-#whiteboard-save::before
-  content: '↓'
+#whiteboard-history-toggle
+  grid-column: 1 / -1
 
-#whiteboard-pdf::before
-  content: '▤'
+  &::before
+    content: '◴'
 
-.whiteboard-project-menu > summary::before
-  content: '▣'
+  &[aria-expanded='true']
+    border-color: var(--gold)
+    background: rgba(255, 209, 102, .14)
+    color: var(--gold)
 
-#whiteboard-clear::before
-  content: '×'
+.whiteboard-file-actions
+  position: relative
+  grid-column: 1 / -1
+  display: grid
+  grid-template-columns: repeat(4, minmax(0, 1fr))
+  gap: .4rem
+
+.whiteboard-icon-action
+  position: relative
+  min-width: 0
+  min-height: 2.85rem
+  display: grid
+  place-items: center
+  padding: .45rem
+  border: 1px solid rgba(255, 253, 248, .18)
+  border-radius: .65rem
+  background: rgba(255, 253, 248, .05)
+  color: var(--white)
+  list-style: none
+
+  &::-webkit-details-marker
+    display: none
+
+  svg
+    width: 1.3rem
+    height: 1.3rem
+    fill: none
+    stroke: currentColor
+    stroke-width: 1.8
+    stroke-linecap: round
+    stroke-linejoin: round
+
+  &::after
+    content: attr(data-tooltip)
+    position: absolute
+    z-index: 30
+    bottom: calc(100% + .55rem)
+    left: 50%
+    width: max-content
+    max-width: 13rem
+    padding: .5rem .65rem
+    border: 1px solid rgba(255, 253, 248, .18)
+    border-radius: .5rem
+    background: #071d33
+    color: var(--white)
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .28)
+    font-size: .85rem
+    font-weight: 700
+    line-height: 1.35
+    text-align: center
+    white-space: normal
+    visibility: hidden
+    opacity: 0
+    pointer-events: none
+    transform: translate(-50%, .35rem)
+    transition: opacity .15s ease, visibility .15s ease, transform .15s ease
+
+  &:hover::after, &:focus-visible::after
+    visibility: visible
+    opacity: 1
+    transform: translate(-50%, 0)
+
+  &:hover, &:focus-visible
+    border-color: var(--gold)
+    color: var(--gold)
+
+.whiteboard-file-actions > :first-child::after
+  left: 0
+  transform: translate(0, .35rem)
+
+.whiteboard-file-actions > :first-child:hover::after, .whiteboard-file-actions > :first-child:focus-visible::after
+  transform: translate(0, 0)
+
+.whiteboard-file-actions > :last-child::after
+  right: 0
+  left: auto
+  transform: translate(0, .35rem)
+
+.whiteboard-file-actions > :last-child:hover::after, .whiteboard-file-actions > :last-child:focus-visible::after
+  transform: translate(0, 0)
+
+.whiteboard-icon-action__label
+  position: absolute
+  width: 1px
+  height: 1px
+  padding: 0
+  overflow: hidden
+  clip: rect(0, 0, 0, 0)
+  white-space: nowrap
+  border: 0
 
 .whiteboard-action--save
   border-color: var(--green)
   background: var(--green)
   color: var(--ink)
+
+  &:hover, &:focus-visible
+    border-color: var(--gold)
+    background: var(--gold)
+    color: var(--ink)
 
 .whiteboard-action--pdf
   border-color: rgba(62, 182, 211, .55)
@@ -539,14 +634,13 @@ button
   > summary
     width: 100%
     cursor: pointer
-    list-style: none
-
-    &::-webkit-details-marker
-      display: none
 
   &[open] > summary
     border-color: var(--blue)
     background: rgba(62, 182, 211, .1)
+
+    &::after
+      display: none
 
   > div
     position: absolute
@@ -1055,6 +1149,121 @@ body.has-whiteboard-fullscreen
     grid-row: 2
     font-size: 1rem
 
+.whiteboard-history-scrubber
+  position: absolute
+  z-index: 11
+  bottom: 1rem
+  left: 50%
+  width: min(34rem, calc(100% - 2rem))
+  padding: .85rem
+  border: 1px solid rgba(255, 253, 248, .24)
+  border-radius: .85rem
+  background: rgba(7, 29, 51, .96)
+  color: var(--white)
+  box-shadow: 0 18px 48px rgba(7, 29, 51, .28)
+  backdrop-filter: blur(12px)
+  visibility: hidden
+  opacity: 0
+  pointer-events: none
+  transform: translate(-50%, 1rem)
+  transition: opacity .18s ease, visibility .18s ease, transform .18s ease
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-visible
+    visibility: visible
+    opacity: 1
+    pointer-events: auto
+    transform: translate(-50%, 0)
+
+.whiteboard-history-scrubber__header
+  display: flex
+  align-items: flex-start
+  justify-content: space-between
+  gap: 1rem
+
+  > div
+    min-width: 0
+
+  strong, span
+    display: block
+
+  strong
+    font-family: Georgia, serif
+    font-size: 1rem
+
+  span
+    margin-top: .15rem
+    color: rgba(255, 253, 248, .6)
+    font-size: .85rem
+
+  button
+    width: 2rem
+    height: 2rem
+    flex: 0 0 auto
+    display: grid
+    place-items: center
+    padding: 0
+    border: 1px solid rgba(255, 253, 248, .18)
+    border-radius: .5rem
+    background: rgba(255, 253, 248, .06)
+    color: var(--white)
+    font-size: 1.1rem
+
+    &:hover, &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+.whiteboard-history-scrubber__controls
+  margin-top: .8rem
+  display: grid
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem
+  align-items: center
+  gap: .65rem
+
+  label, input
+    width: 100%
+
+  input
+    accent-color: var(--gold)
+    cursor: ew-resize
+
+  button
+    width: 2.5rem
+    height: 2.5rem
+    display: grid
+    place-items: center
+    padding: 0
+    border: 1px solid rgba(255, 253, 248, .18)
+    border-radius: .6rem
+    background: rgba(255, 253, 248, .06)
+    color: var(--white)
+
+    svg
+      width: 1.15rem
+      height: 1.15rem
+      fill: none
+      stroke: currentColor
+      stroke-width: 1.9
+      stroke-linecap: round
+      stroke-linejoin: round
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .35
+
+#whiteboard-history-output
+  margin-top: .55rem
+  display: block
+  color: var(--gold)
+  font-size: .85rem
+  font-weight: 700
+  text-align: center
+
 .whiteboard-axis-label
   position: absolute
   padding: .05rem .18rem
@@ -1167,6 +1376,11 @@ body.has-whiteboard-fullscreen
       cursor: not-allowed
       opacity: .38
 
+    &[aria-expanded='true']
+      border-color: var(--gold)
+      background: var(--gold)
+      color: var(--ink)
+
   .whiteboard-fullscreen-clear
     color: var(--coral)
 
@@ -1177,6 +1391,12 @@ body.has-whiteboard-fullscreen
 
 .whiteboard-main:fullscreen .whiteboard-fullscreen-actions, .whiteboard-main.is-fullscreen-fallback .whiteboard-fullscreen-actions
   display: flex
+
+.whiteboard-main:fullscreen .whiteboard-history-scrubber, .whiteboard-main.is-fullscreen-fallback .whiteboard-history-scrubber
+  bottom: 8rem
+
+.whiteboard-main:fullscreen.is-toolbar-hidden .whiteboard-history-scrubber, .whiteboard-main.is-fullscreen-fallback.is-toolbar-hidden .whiteboard-history-scrubber
+  bottom: 1rem
 
 .whiteboard-main:fullscreen.is-toolbar-hidden .whiteboard-fullscreen-actions, .whiteboard-main.is-fullscreen-fallback.is-toolbar-hidden .whiteboard-fullscreen-actions
   top: 1rem
@@ -1351,7 +1571,21 @@ body.has-whiteboard-fullscreen
     bottom: .5rem
     left: .5rem
 
+  .whiteboard-history-scrubber
+    top: auto
+    bottom: 5.75rem
+    width: calc(100% - 1rem)
+    padding: .7rem
+
   .whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
+    .whiteboard-history-scrubber
+      top: 8rem
+      bottom: auto
+
+    &.is-toolbar-hidden .whiteboard-history-scrubber
+      top: 4rem
+      bottom: auto
+
     .whiteboard-zoom-controls
       bottom: 8rem
 

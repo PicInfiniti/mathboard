@@ -120,6 +120,7 @@ button
   gap: .45rem
 
   button
+    position: relative
     min-width: 0
     min-height: 4rem
     padding: .55rem .35rem
@@ -160,6 +161,51 @@ button
 .whiteboard-panel-tab__icon
   font-size: 1.05rem
   line-height: 1
+
+.whiteboard-save-status
+  min-height: 2rem
+  padding: .4rem .55rem
+  display: flex
+  align-items: center
+  justify-content: center
+  gap: .4rem
+  border: 1px solid rgba(255, 253, 248, .12)
+  border-radius: .6rem
+  background: rgba(255, 253, 248, .035)
+  color: rgba(255, 253, 248, .64)
+
+  > span
+    width: .5rem
+    height: .5rem
+    flex: 0 0 auto
+    border-radius: 50%
+    background: var(--gold)
+
+  strong
+    font-size: .54rem
+    font-weight: 700
+    letter-spacing: .04em
+
+  &[data-state='saving'] > span, &[data-state='loading'] > span
+    animation: whiteboard-save-pulse 1s ease-in-out infinite alternate
+
+  &[data-state='saved'] > span
+    background: var(--green)
+
+  &[data-state='error']
+    border-color: rgba(255, 107, 72, .55)
+    color: #ffb3a1
+
+    > span
+      background: var(--coral)
+
+@keyframes whiteboard-save-pulse
+  from
+    opacity: .4
+    transform: scale(.8)
+  to
+    opacity: 1
+    transform: scale(1)
 
 .whiteboard-tool-group
   margin: 0
@@ -434,7 +480,7 @@ button
   letter-spacing: .13em
   text-transform: uppercase
 
-.whiteboard-action
+.whiteboard-action, .whiteboard-project-menu > summary
   min-height: 2.45rem
   padding: .4rem .3rem
   display: flex
@@ -469,6 +515,12 @@ button
 #whiteboard-save::before
   content: '↓'
 
+#whiteboard-pdf::before
+  content: '▤'
+
+.whiteboard-project-menu > summary::before
+  content: '▣'
+
 #whiteboard-clear::before
   content: '×'
 
@@ -476,6 +528,71 @@ button
   border-color: var(--green)
   background: var(--green)
   color: var(--ink)
+
+.whiteboard-action--pdf
+  border-color: rgba(62, 182, 211, .55)
+
+.whiteboard-project-menu
+  position: relative
+  min-width: 0
+
+  > summary
+    width: 100%
+    cursor: pointer
+    list-style: none
+
+    &::-webkit-details-marker
+      display: none
+
+  &[open] > summary
+    border-color: var(--blue)
+    background: rgba(62, 182, 211, .1)
+
+  > div
+    position: absolute
+    z-index: 20
+    left: 0
+    bottom: calc(100% + .45rem)
+    width: 12.5rem
+    padding: .4rem
+    display: grid
+    gap: .3rem
+    border: 1px solid rgba(255, 253, 248, .2)
+    border-radius: .75rem
+    background: #10283e
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .28)
+
+    button
+      min-height: 2.55rem
+      padding: .5rem .65rem
+      display: flex
+      align-items: center
+      gap: .5rem
+      border: 1px solid rgba(255, 253, 248, .16)
+      border-radius: .55rem
+      background: rgba(255, 253, 248, .04)
+      color: var(--white)
+      font-size: .62rem
+      font-weight: 700
+      text-align: left
+
+      span
+        width: 1rem
+        color: var(--gold)
+        font-size: .9rem
+        text-align: center
+
+      &:hover, &:focus-visible
+        border-color: var(--blue)
+        background: rgba(62, 182, 211, .1)
+
+      &.is-confirming
+        border-color: var(--coral)
+        background: var(--coral)
+        color: var(--ink)
+
+        span
+          color: var(--ink)
 
 .whiteboard-action--clear
   color: #ffb3a1
@@ -567,7 +684,7 @@ body.has-whiteboard-fullscreen
     transform: translateX(-50%)
     transition: opacity .2s ease, visibility .2s ease, transform .2s ease
 
-  .whiteboard-panel-tabs
+  .whiteboard-panel-tabs, .whiteboard-save-status
     display: none
 
   .whiteboard-tool-group--background, .whiteboard-smoothing, .whiteboard-history, .whiteboard-help
@@ -678,8 +795,10 @@ body.has-whiteboard-fullscreen
   overflow-x: auto
   scrollbar-width: thin
   scrollbar-color: rgba(7, 29, 51, .25) transparent
+  touch-action: pan-y
 
   button
+    position: relative
     flex: 0 0 auto
     min-width: 5.4rem
     min-height: 2.5rem
@@ -691,6 +810,11 @@ body.has-whiteboard-fullscreen
     font-size: .64rem
     font-weight: 700
     white-space: nowrap
+    cursor: grab
+    -webkit-touch-callout: none
+
+    &:active
+      cursor: grabbing
 
     &:hover, &:focus-visible
       border-color: rgba(7, 29, 51, .2)
@@ -700,6 +824,24 @@ body.has-whiteboard-fullscreen
       border-color: var(--ink)
       background: var(--ink)
       color: var(--white)
+
+    &.is-dragging
+      opacity: .42
+
+    &.is-drop-before::before, &.is-drop-after::after
+      content: ''
+      position: absolute
+      top: .25rem
+      bottom: .25rem
+      width: 3px
+      border-radius: 999px
+      background: var(--coral)
+
+    &.is-drop-before::before
+      left: -.25rem
+
+    &.is-drop-after::after
+      right: -.25rem
 
 .whiteboard-canvas-tabs__actions
   flex: 0 0 auto
@@ -1067,6 +1209,9 @@ body.has-whiteboard-fullscreen
     overflow: visible
 
   .whiteboard-panel-tabs
+    grid-column: 1 / -1
+
+  .whiteboard-save-status
     grid-column: 1 / -1
 
   .whiteboard-tool-group--drawing, .whiteboard-tool-group--background, .whiteboard-history, .whiteboard-help

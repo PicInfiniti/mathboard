@@ -1651,6 +1651,306 @@ body.has-whiteboard-fullscreen
     .whiteboard-board__hint
       display: none
 
+// Phones use the board as the primary surface. The settings stay available as a
+// scrollable sheet instead of pushing the canvas below the fold.
+@media (max-width: 620px), (max-height: 600px) and (max-width: 1000px)
+  .whiteboard-header
+    min-height: 58px
+    padding: .55rem .75rem
+
+  .whiteboard-brand
+    gap: .5rem
+
+    small
+      display: none
+
+  .whiteboard-brand__mark
+    width: 2rem
+    height: 2rem
+    font-size: 1.1rem
+
+  .whiteboard-header__home
+    padding: .55rem .7rem
+
+  .whiteboard-main
+    position: relative
+    min-height: calc(100dvh - 58px)
+    height: calc(100dvh - 58px)
+    padding: .4rem
+    display: block
+    overflow: hidden
+
+  .whiteboard-board
+    position: absolute
+    inset: .4rem
+    width: auto
+    height: auto
+    min-height: 0
+
+  .whiteboard-toolbar
+    position: absolute
+    z-index: 12
+    right: auto
+    bottom: .5rem
+    left: .5rem
+    width: calc(100% - 5.25rem)
+    max-height: min(56dvh, 30rem)
+    padding: .6rem
+    display: grid
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+    align-items: start
+    gap: .55rem
+    overflow-x: hidden
+    overflow-y: auto
+    overscroll-behavior: contain
+    border-radius: .9rem
+    box-shadow: 0 16px 42px rgba(7, 29, 51, .34)
+    transform: none
+    transition: opacity .2s ease, visibility .2s ease, transform .2s ease
+    scrollbar-width: thin
+    scrollbar-color: rgba(255, 253, 248, .3) transparent
+
+  .whiteboard-main.is-toolbar-hidden .whiteboard-toolbar,
+  .whiteboard-main:fullscreen.is-toolbar-hidden .whiteboard-toolbar,
+  .whiteboard-main.is-fullscreen-fallback.is-toolbar-hidden .whiteboard-toolbar
+    visibility: hidden
+    opacity: 0
+    pointer-events: none
+    transform: translateY(calc(100% + 1rem))
+
+  .whiteboard-panel-tabs, .whiteboard-save-status,
+  .whiteboard-tool-group--drawing, .whiteboard-tool-group--colors,
+  .whiteboard-tool-group--stroke, .whiteboard-tool-group--background,
+  .whiteboard-history, .whiteboard-help
+    grid-column: 1 / -1
+
+  .whiteboard-panel-tabs
+    gap: .35rem
+
+    button
+      min-height: 2.85rem
+      padding: .4rem .5rem
+      flex-direction: row
+      gap: .4rem
+
+      small
+        display: none
+
+  .whiteboard-save-status
+    min-height: 1.8rem
+    padding: .3rem .45rem
+
+  .whiteboard-tool-group
+    legend, > label
+      margin-bottom: .35rem
+      font-size: .75rem
+
+  .whiteboard-tool-grid
+    grid-template-columns: repeat(5, minmax(0, 1fr))
+    gap: .25rem
+
+  .whiteboard-tool
+    min-height: 2.75rem
+    padding: .3rem .15rem
+    border-radius: .55rem
+    font-size: .75rem
+
+    span:first-child
+      font-size: .95rem
+
+  .whiteboard-colors
+    max-width: 18rem
+    gap: .4rem
+
+  .whiteboard-color
+    width: min(100%, 2.7rem)
+    justify-self: center
+
+  .whiteboard-size-row
+    grid-template-columns: minmax(0, 1fr) 2rem
+    gap: .45rem
+
+    output
+      min-height: 2rem
+
+  .whiteboard-smoothing
+    min-height: 2.8rem
+    margin-top: .5rem
+    padding: .45rem .55rem
+
+    small
+      display: none
+
+  .whiteboard-grid-button
+    min-height: 2.4rem
+
+  .whiteboard-axis-numbers
+    min-height: 2.55rem
+
+  .whiteboard-history
+    margin-top: 0
+    padding-top: .55rem
+
+  .whiteboard-history__title
+    margin-bottom: 0
+    font-size: .75rem
+
+  .whiteboard-action
+    min-height: 2.25rem
+
+  .whiteboard-icon-action
+    min-height: 2.55rem
+
+  .whiteboard-help
+    padding-top: .6rem
+
+  .whiteboard-panel-toggle, .whiteboard-fullscreen-toggle
+    right: .5rem
+    width: 3rem
+    height: 3rem
+    border-radius: .7rem
+
+  .whiteboard-panel-toggle
+    bottom: 4rem
+    display: grid
+
+  .whiteboard-fullscreen-toggle
+    bottom: .5rem
+
+  .whiteboard-zoom-controls
+    bottom: .5rem
+    left: .5rem
+    grid-template-columns: 2.4rem auto
+    grid-template-rows: repeat(2, 2.4rem)
+    gap: .3rem
+
+    button
+      min-width: 2.4rem
+      min-height: 2.4rem
+
+  .whiteboard-canvas-tabs
+    top: .5rem
+    right: .5rem
+    left: .5rem
+    padding: .22rem
+
+  .whiteboard-canvas-tabs__list button,
+  .whiteboard-canvas-tabs__actions button
+    min-height: 2.25rem
+
+  .whiteboard-canvas-tabs__list button
+    min-width: 4.6rem
+    padding: .3rem .55rem
+
+  .whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
+    .whiteboard-toolbar
+      right: auto
+      bottom: .5rem
+      left: .5rem
+      width: calc(100% - 5.25rem)
+      max-height: min(56dvh, 30rem)
+      padding: .6rem
+      transform: none
+
+    .whiteboard-panel-toggle, .whiteboard-fullscreen-toggle
+      right: .5rem
+
+    .whiteboard-panel-toggle
+      bottom: 4rem
+
+    .whiteboard-fullscreen-toggle
+      bottom: .5rem
+
+    .whiteboard-zoom-controls
+      bottom: .5rem
+
+    .whiteboard-status
+      right: .5rem
+      bottom: 7.75rem
+
+@media (max-height: 600px) and (max-width: 1000px)
+  .whiteboard-header
+    min-height: 50px
+    padding-top: .35rem
+    padding-bottom: .35rem
+
+  .whiteboard-brand__mark
+    width: 1.85rem
+    height: 1.85rem
+
+  .whiteboard-main
+    min-height: calc(100dvh - 50px)
+    height: calc(100dvh - 50px)
+
+  .whiteboard-toolbar
+    width: min(46rem, calc(100% - 5.25rem))
+    max-height: min(62dvh, 14rem)
+    grid-template-columns: minmax(13rem, 1.3fr) minmax(8rem, .75fr) minmax(10rem, 1fr)
+    gap: .45rem .65rem
+
+  .whiteboard-panel-tabs
+    grid-column: 1 / 3
+
+  .whiteboard-save-status
+    grid-column: 3
+    align-self: stretch
+
+  .whiteboard-tool-group--drawing,
+  .whiteboard-tool-group--background,
+  .whiteboard-history,
+  .whiteboard-help
+    grid-column: 1 / -1
+
+  .whiteboard-tool-group--colors,
+  .whiteboard-tool-group--stroke
+    grid-column: span 1
+
+  .whiteboard-tool-group--drawing
+    grid-column: 1
+
+  .whiteboard-tool-group--colors
+    grid-column: 2
+
+  .whiteboard-tool-group--stroke
+    grid-column: 3
+
+  .whiteboard-history
+    grid-template-columns: repeat(3, minmax(0, 1fr))
+
+  .whiteboard-history__title, .whiteboard-file-actions
+    grid-column: 1 / -1
+
+  #whiteboard-history-toggle
+    grid-column: auto
+
+  .whiteboard-main:fullscreen, .whiteboard-main.is-fullscreen-fallback
+    .whiteboard-toolbar
+      width: min(41rem, calc(100% - 6.25rem))
+      max-height: calc(100% - 1rem)
+      left: 50%
+      grid-template-columns: minmax(15rem, 1.3fr) minmax(9rem, .8fr) minmax(12rem, 1fr)
+      align-items: end
+      transform: translateX(-50%)
+
+    &.is-toolbar-hidden .whiteboard-toolbar
+      transform: translate(-50%, calc(100% + 1rem))
+
+    .whiteboard-tool-group--drawing
+      grid-column: 1
+
+    .whiteboard-tool-group--colors,
+    .whiteboard-tool-group--stroke
+      grid-column: span 1
+
+    .whiteboard-tool span:last-child
+      display: block
+
+    .whiteboard-fullscreen-actions
+      top: 3.35rem
+
+    &.is-toolbar-hidden .whiteboard-fullscreen-actions
+      top: .5rem
+
 @media (prefers-reduced-motion: reduce)
   *, *::before, *::after
     scroll-behavior: auto !important

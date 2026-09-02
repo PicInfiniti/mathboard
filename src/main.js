@@ -1,20 +1,21 @@
-import "../assets/sass/whiteboard.sass";
-import { sitePath } from "../sections/shared.js";
+import "./assets/sass/whiteboard.sass";
+
+const courseUrl = "https://picinfiniti.net/pre-calculus/";
 
 const root = document.querySelector("#app");
 
 root.innerHTML = `
   <div class="whiteboard-shell">
     <header class="whiteboard-header">
-      <a class="whiteboard-brand" href="${sitePath()}" aria-label="Back to the MATH 1280 course home">
+      <a class="whiteboard-brand" href="${import.meta.env.BASE_URL}" aria-label="Math Whiteboard home">
         <span class="whiteboard-brand__mark" aria-hidden="true">ƒ</span>
-        <span><strong>Precalculus</strong><small>MATH 1280</small></span>
+        <span><strong>Mathboard</strong><small>Visual workspace</small></span>
       </a>
       <div class="whiteboard-header__title">
         <strong>Math whiteboard</strong>
         <span>Sketch · test · explain</span>
       </div>
-      <a class="whiteboard-header__home" href="${sitePath()}">Course map <span aria-hidden="true">↗</span></a>
+      <a class="whiteboard-header__home" href="${courseUrl}">Precalculus course <span aria-hidden="true">↗</span></a>
     </header>
 
     <main class="whiteboard-main">

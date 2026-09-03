@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/whiteboard/",
+  base: "/mathboard/",
   build: {
     target: "esnext",
   },

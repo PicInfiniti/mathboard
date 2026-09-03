@@ -1,8 +1,8 @@
-# Mathboard
+# MathBoard
 
 A responsive visual workspace for sketching graphs, diagrams, equations, and ideas.
 
-**[Open Mathboard](https://picinfiniti.net/whiteboard/)** · [Precalculus course](https://picinfiniti.net/pre-calculus/)
+**[Open MathBoard](https://picinfiniti.net/mathboard/)** · [Precalculus course](https://picinfiniti.net/pre-calculus/)
 
 ## Features
 

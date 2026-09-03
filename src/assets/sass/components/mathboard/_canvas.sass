@@ -1,0 +1,653 @@
+.mathboard-board
+  --board-pan-x: 0px
+  --board-pan-y: 0px
+  --board-grid-size: 32px
+  --board-grid-half: 16px
+  --board-minor-grid-size: 8px
+  --board-minor-grid-half: 4px
+  position: relative
+  min-width: 0
+  min-height: 620px
+  overflow: hidden
+  border: 1px solid rgba(7, 29, 51, .22)
+  border-radius: 1.1rem
+  background-color: var(--white)
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .22)
+
+  &.is-grid-square, &.is-grid-coordinate
+    background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px)
+    background-size: var(--board-grid-size) var(--board-grid-size)
+    background-position: calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y))
+
+  &.is-zoomed-precision.is-grid-square, &.is-zoomed-precision.is-grid-coordinate
+    background-image: linear-gradient(rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .085) 1px, transparent 1px), linear-gradient(rgba(7, 29, 51, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(7, 29, 51, .035) 1px, transparent 1px)
+    background-size: var(--board-grid-size) var(--board-grid-size), var(--board-grid-size) var(--board-grid-size), var(--board-minor-grid-size) var(--board-minor-grid-size), var(--board-minor-grid-size) var(--board-minor-grid-size)
+    background-position: calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y)), calc(50% + var(--board-grid-half) + var(--board-pan-x)) calc(50% + var(--board-grid-half) + var(--board-pan-y)), calc(50% + var(--board-minor-grid-half) + var(--board-pan-x)) calc(50% + var(--board-minor-grid-half) + var(--board-pan-y)), calc(50% + var(--board-minor-grid-half) + var(--board-pan-x)) calc(50% + var(--board-minor-grid-half) + var(--board-pan-y))
+
+  &.is-grid-coordinate::before, &.is-grid-coordinate::after
+    content: ''
+    position: absolute
+    z-index: 0
+    pointer-events: none
+    background: rgba(7, 29, 51, .48)
+
+  &.is-grid-coordinate::before
+    top: 0
+    bottom: 0
+    left: calc(50% + var(--board-pan-x))
+    width: 2px
+    transform: translateX(-50%)
+
+  &.is-grid-coordinate::after
+    top: calc(50% + var(--board-pan-y))
+    right: 0
+    left: 0
+    height: 2px
+    transform: translateY(-50%)
+
+.mathboard-canvas-tabs
+  position: absolute
+  z-index: 5
+  top: 1rem
+  right: 1rem
+  left: 1rem
+  min-width: 0
+  padding: .3rem
+  display: flex
+  align-items: center
+  gap: .35rem
+  border: 1px solid rgba(7, 29, 51, .15)
+  border-radius: .75rem
+  background: rgba(255, 253, 248, .94)
+  box-shadow: 0 8px 24px rgba(7, 29, 51, .12)
+  backdrop-filter: blur(8px)
+  transition: opacity .2s ease, visibility .2s ease, transform .2s ease
+  -webkit-user-select: none
+  user-select: none
+
+.mathboard-main:fullscreen.is-toolbar-hidden .mathboard-canvas-tabs, .mathboard-main.is-fullscreen-fallback.is-toolbar-hidden .mathboard-canvas-tabs
+  visibility: hidden
+  opacity: 0
+  pointer-events: none
+  transform: translateY(calc(-100% - 1.5rem))
+
+.mathboard-canvas-tabs__list
+  min-width: 0
+  display: flex
+  gap: .3rem
+  overflow-x: auto
+  scrollbar-width: thin
+  scrollbar-color: rgba(7, 29, 51, .25) transparent
+  touch-action: pan-y
+
+  button
+    position: relative
+    flex: 0 0 auto
+    min-width: 5.4rem
+    min-height: 2.5rem
+    padding: .4rem .75rem
+    border: 1px solid transparent
+    border-radius: .55rem
+    background: transparent
+    color: var(--ink-soft)
+    font-size: .85rem
+    font-weight: 700
+    white-space: nowrap
+    cursor: grab
+    -webkit-touch-callout: none
+
+    &:active
+      cursor: grabbing
+
+    &:hover, &:focus-visible
+      border-color: rgba(7, 29, 51, .2)
+      color: var(--ink)
+
+    &[aria-selected='true']
+      border-color: var(--ink)
+      background: var(--ink)
+      color: var(--white)
+
+    &.is-dragging
+      opacity: .42
+
+    &.is-drop-before::before, &.is-drop-after::after
+      content: ''
+      position: absolute
+      top: .25rem
+      bottom: .25rem
+      width: 3px
+      border-radius: 999px
+      background: var(--coral)
+
+    &.is-drop-before::before
+      left: -.25rem
+
+    &.is-drop-after::after
+      right: -.25rem
+
+.mathboard-canvas-tabs__actions
+  flex: 0 0 auto
+  display: flex
+  gap: .3rem
+
+  button
+    min-height: 2.5rem
+    padding: .35rem .55rem
+    display: flex
+    align-items: center
+    justify-content: center
+    gap: .25rem
+    border: 1px solid rgba(7, 29, 51, .2)
+    border-radius: .55rem
+    background: var(--white)
+    color: var(--ink)
+    font-size: .85rem
+    font-weight: 700
+
+    span:first-child
+      font-size: 1rem
+      line-height: 1
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      background: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .35
+
+  #mathboard-canvas-delete.is-confirming
+    border-color: var(--coral)
+    background: var(--coral)
+
+.mathboard-rename-dialog
+  width: min(calc(100% - 2rem), 24rem)
+  padding: 0
+  border: 1px solid rgba(7, 29, 51, .2)
+  border-radius: 1rem
+  background: var(--white)
+  color: var(--ink)
+  box-shadow: 0 24px 70px rgba(7, 29, 51, .3)
+
+  &::backdrop
+    background: rgba(7, 29, 51, .58)
+    backdrop-filter: blur(3px)
+
+  form
+    padding: 1.25rem
+
+    > p
+      margin: 0 0 .9rem
+      color: var(--coral)
+      font-size: .85rem
+      font-weight: 700
+      letter-spacing: .13em
+      text-transform: uppercase
+
+    label
+      display: block
+      margin-bottom: .45rem
+      font-family: Georgia, 'Times New Roman', serif
+      font-size: 1.05rem
+      font-weight: 700
+
+    input
+      width: 100%
+      min-height: 3rem
+      padding: .65rem .75rem
+      border: 1px solid rgba(7, 29, 51, .25)
+      border-radius: .65rem
+      background: #f4f0e7
+      color: var(--ink)
+      font: inherit
+
+      &:focus
+        border-color: var(--blue)
+        outline: 3px solid rgba(62, 182, 211, .2)
+
+    > div
+      margin-top: 1rem
+      display: grid
+      grid-template-columns: repeat(2, 1fr)
+      gap: .55rem
+
+    button
+      min-height: 2.8rem
+      padding: .55rem
+      border: 1px solid rgba(7, 29, 51, .2)
+      border-radius: .65rem
+      background: transparent
+      color: var(--ink)
+      font-size: .85rem
+      font-weight: 700
+
+      &[type='submit']
+        border-color: var(--gold)
+        background: var(--gold)
+
+.mathboard-canvas
+  position: absolute
+  z-index: 1
+  inset: 0
+  width: 100%
+  height: 100%
+  display: block
+  cursor: crosshair
+  touch-action: none
+  overscroll-behavior: contain
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-erasing
+    cursor: none
+
+  &.is-panning
+    cursor: grab
+
+  &.is-panning-active
+    cursor: grabbing
+
+  &.is-zooming
+    cursor: zoom-in
+
+.mathboard-axis-labels
+  position: absolute
+  z-index: 0
+  inset: 0
+  overflow: hidden
+  opacity: 0
+  pointer-events: none
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-visible
+    opacity: 1
+
+.mathboard-axis-labels__layer
+  position: absolute
+  inset: 0
+  will-change: transform
+
+.mathboard-zoom-selection
+  position: absolute
+  z-index: 3
+  display: none
+  border: 2px dashed var(--coral)
+  border-radius: .35rem
+  background: rgba(255, 107, 72, .1)
+  box-shadow: 0 0 0 1px rgba(255, 253, 248, .85)
+  pointer-events: none
+
+  &.is-visible
+    display: block
+
+.mathboard-zoom-controls
+  position: absolute
+  z-index: 5
+  right: auto
+  bottom: 1rem
+  left: 1rem
+  display: grid
+  grid-template-columns: 2.5rem auto
+  grid-template-rows: repeat(2, 2.5rem)
+  gap: .35rem
+  -webkit-user-select: none
+  user-select: none
+
+  button
+    min-width: 2.5rem
+    min-height: 2.5rem
+    padding: .35rem .55rem
+    border: 1px solid rgba(255, 253, 248, .28)
+    border-radius: .6rem
+    background: var(--ink)
+    color: var(--white)
+    box-shadow: 0 8px 22px rgba(7, 29, 51, .18)
+    font-size: .85rem
+    font-weight: 700
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .35
+
+  #mathboard-zoom-out, #mathboard-zoom-in
+    font-size: 1.25rem
+
+  #mathboard-zoom-out
+    grid-column: 1
+    grid-row: 1
+
+  #mathboard-zoom-in
+    grid-column: 1
+    grid-row: 2
+
+  #mathboard-zoom-reset
+    grid-column: 2
+    grid-row: 2
+    font-size: 1rem
+
+.mathboard-history-scrubber
+  position: absolute
+  z-index: 11
+  bottom: 1rem
+  left: 50%
+  width: min(34rem, calc(100% - 2rem))
+  padding: .85rem
+  border: 1px solid rgba(255, 253, 248, .24)
+  border-radius: .85rem
+  background: rgba(7, 29, 51, .96)
+  color: var(--white)
+  box-shadow: 0 18px 48px rgba(7, 29, 51, .28)
+  backdrop-filter: blur(12px)
+  visibility: hidden
+  opacity: 0
+  pointer-events: none
+  transform: translate(-50%, 1rem)
+  transition: opacity .18s ease, visibility .18s ease, transform .18s ease
+  -webkit-user-select: none
+  user-select: none
+
+  &.is-visible
+    visibility: visible
+    opacity: 1
+    pointer-events: auto
+    transform: translate(-50%, 0)
+
+.mathboard-history-scrubber__header
+  display: flex
+  align-items: flex-start
+  justify-content: space-between
+  gap: 1rem
+
+  > div
+    min-width: 0
+
+  strong, span
+    display: block
+
+  strong
+    font-family: Georgia, serif
+    font-size: 1rem
+
+  span
+    margin-top: .15rem
+    color: rgba(255, 253, 248, .6)
+    font-size: .85rem
+
+  button
+    width: 2rem
+    height: 2rem
+    flex: 0 0 auto
+    display: grid
+    place-items: center
+    padding: 0
+    border: 1px solid rgba(255, 253, 248, .18)
+    border-radius: .5rem
+    background: rgba(255, 253, 248, .06)
+    color: var(--white)
+    font-size: 1.1rem
+
+    &:hover, &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+.mathboard-history-scrubber__controls
+  margin-top: .8rem
+  display: grid
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem
+  align-items: center
+  gap: .65rem
+
+  label, input
+    width: 100%
+
+  input
+    accent-color: var(--gold)
+    cursor: ew-resize
+
+  button
+    width: 2.5rem
+    height: 2.5rem
+    display: grid
+    place-items: center
+    padding: 0
+    border: 1px solid rgba(255, 253, 248, .18)
+    border-radius: .6rem
+    background: rgba(255, 253, 248, .06)
+    color: var(--white)
+
+    svg
+      width: 1.15rem
+      height: 1.15rem
+      fill: none
+      stroke: currentColor
+      stroke-width: 1.9
+      stroke-linecap: round
+      stroke-linejoin: round
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      color: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .35
+
+#mathboard-history-output
+  margin-top: .55rem
+  display: block
+  color: var(--gold)
+  font-size: .85rem
+  font-weight: 700
+  text-align: center
+
+.mathboard-axis-label
+  position: absolute
+  padding: .05rem .18rem
+  border-radius: .18rem
+  background: rgba(255, 253, 248, .78)
+  color: rgba(7, 29, 51, .7)
+  font-family: Ubuntu, Arial, sans-serif
+  font-size: var(--axis-label-size, 13px)
+  font-weight: 500
+  line-height: 1
+  white-space: nowrap
+
+.mathboard-axis-label--x
+  transform: translateX(-50%)
+
+.mathboard-axis-label--y
+  transform: translateY(-50%)
+
+.mathboard-eraser-preview
+  --eraser-diameter: 15px
+  position: absolute
+  z-index: 3
+  width: var(--eraser-diameter)
+  height: var(--eraser-diameter)
+  border: 2px dashed var(--coral)
+  border-radius: 50%
+  background: rgba(255, 107, 72, .08)
+  box-shadow: 0 0 0 1px rgba(255, 253, 248, .86)
+  opacity: 0
+  transform: translate(-50%, -50%)
+  pointer-events: none
+  transition: width .12s ease, height .12s ease, opacity .12s ease
+
+  &.is-visible
+    opacity: 1
+
+.mathboard-panel-toggle, .mathboard-fullscreen-toggle
+  position: absolute
+  z-index: 6
+  bottom: 1rem
+  width: 3.25rem
+  height: 3.25rem
+  display: grid
+  place-items: center
+  padding: 0
+  border: 1px solid rgba(255, 253, 248, .32)
+  border-radius: .65rem
+  background: var(--ink)
+  color: var(--white)
+  box-shadow: 0 10px 28px rgba(7, 29, 51, .24)
+  -webkit-user-select: none
+  user-select: none
+
+  svg
+    width: 1.35rem
+    height: 1.35rem
+    fill: none
+    stroke: currentColor
+    stroke-width: 2
+    stroke-linecap: round
+    stroke-linejoin: round
+
+  &:hover, &:focus-visible
+    border-color: var(--gold)
+    color: var(--gold)
+
+  &[aria-pressed='true']
+    border-color: var(--gold)
+    background: var(--gold)
+    color: var(--ink)
+
+.mathboard-fullscreen-actions
+  position: absolute
+  z-index: 6
+  top: 5rem
+  right: 1rem
+  display: none
+  gap: .4rem
+  transition: top .2s ease
+  -webkit-user-select: none
+  user-select: none
+
+  button
+    width: 3rem
+    height: 3rem
+    display: grid
+    place-items: center
+    padding: 0
+    border: 1px solid rgba(7, 29, 51, .2)
+    border-radius: .65rem
+    background: rgba(255, 253, 248, .94)
+    color: var(--ink)
+    box-shadow: 0 10px 28px rgba(7, 29, 51, .18)
+    backdrop-filter: blur(8px)
+
+    svg
+      width: 1.25rem
+      height: 1.25rem
+      fill: none
+      stroke: currentColor
+      stroke-width: 1.9
+      stroke-linecap: round
+      stroke-linejoin: round
+
+    &:hover:not(:disabled), &:focus-visible
+      border-color: var(--gold)
+      background: var(--gold)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .38
+
+    &[aria-expanded='true']
+      border-color: var(--gold)
+      background: var(--gold)
+      color: var(--ink)
+
+  .mathboard-fullscreen-clear
+    color: var(--coral)
+
+    &.is-confirming
+      border-color: var(--coral)
+      background: var(--coral)
+      color: var(--ink)
+
+.mathboard-main:fullscreen .mathboard-fullscreen-actions, .mathboard-main.is-fullscreen-fallback .mathboard-fullscreen-actions
+  display: flex
+
+.mathboard-main:fullscreen .mathboard-history-scrubber, .mathboard-main.is-fullscreen-fallback .mathboard-history-scrubber
+  bottom: 8rem
+
+.mathboard-main:fullscreen.is-toolbar-hidden .mathboard-history-scrubber, .mathboard-main.is-fullscreen-fallback.is-toolbar-hidden .mathboard-history-scrubber
+  bottom: 1rem
+
+.mathboard-main:fullscreen.is-toolbar-hidden .mathboard-fullscreen-actions, .mathboard-main.is-fullscreen-fallback.is-toolbar-hidden .mathboard-fullscreen-actions
+  top: 1rem
+
+.mathboard-fullscreen-toggle
+  right: 1rem
+
+  .mathboard-fullscreen-toggle__collapse
+    display: none
+
+  &[aria-pressed='true']
+    .mathboard-fullscreen-toggle__expand
+      display: none
+
+    .mathboard-fullscreen-toggle__collapse
+      display: block
+
+.mathboard-panel-toggle
+  right: 5rem
+  display: none
+
+  span
+    font-size: 1.3rem
+    line-height: 1
+
+.mathboard-main:fullscreen .mathboard-panel-toggle, .mathboard-main.is-fullscreen-fallback .mathboard-panel-toggle
+  display: grid
+
+.mathboard-main.is-toolbar-hidden .mathboard-panel-toggle
+  border-color: var(--gold)
+  background: var(--gold)
+  color: var(--ink)
+
+.mathboard-board__hint
+  position: absolute
+  z-index: 2
+  top: 5.25rem
+  left: 50%
+  padding: .55rem .8rem
+  transform: translateX(-50%)
+  border: 1px solid var(--line)
+  border-radius: 999px
+  background: rgba(255, 253, 248, .88)
+  color: var(--ink-soft)
+  font-size: .85rem
+  font-weight: 700
+  pointer-events: none
+  transition: opacity .25s ease
+
+.mathboard-board.has-ink .mathboard-board__hint
+  opacity: 0
+
+.mathboard-status
+  position: absolute
+  z-index: 4
+  right: 5rem
+  bottom: 1rem
+  max-width: min(28rem, calc(100% - 2rem))
+  padding: .6rem .8rem
+  border-radius: .6rem
+  background: var(--ink)
+  color: var(--white)
+  font-size: .85rem
+  font-weight: 700
+  opacity: 0
+  transform: translateY(.5rem)
+  pointer-events: none
+  transition: opacity .18s ease, transform .18s ease
+
+  &.is-visible
+    opacity: 1
+    transform: translateY(0)

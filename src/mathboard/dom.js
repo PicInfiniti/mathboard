@@ -3,6 +3,7 @@ export function getMathBoardElements(root = document) {
   const queryAll = (selector) => [...root.querySelectorAll(selector)];
 
   return {
+    assistButtons: queryAll("[data-assist]"),
     axisLabels: query("#mathboard-axis-labels"),
     axisNumbersButton: query("#mathboard-axis-numbers"),
     axisSizeInput: query("#mathboard-axis-size"),

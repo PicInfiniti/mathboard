@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { coordinateLabelInterval, formatCoordinate } from "../src/mathboard/coordinates.js";
+import { renderStroke, shapeLength } from "../src/mathboard/drawing.js";
+import { fitAssistedShape } from "../src/mathboard/shape-assist.js";
 import {
   isSupportedProject,
   PROJECT_FORMAT,
@@ -40,6 +42,60 @@ test("normalizes tool sizes and persisted canvas settings", () => {
   assert.equal(restored.state.canvases[0].name, "Notes");
 });
 
+test("restores a valid draw assist setting", () => {
+  const currentState = createInitialState();
+  const restored = hydrateState({ ...currentState, assistTool: "circle" }, currentState);
+  const invalid = hydrateState({ ...currentState, assistTool: "triangle" }, currentState);
+
+  assert.equal(restored.state.assistTool, "circle");
+  assert.equal(invalid.state.assistTool, null);
+});
+
+test("fits rough freehand gestures into assisted shapes", () => {
+  const line = fitAssistedShape("line", [
+    { x: .1, y: .2 },
+    { x: .3, y: .31 },
+    { x: .5, y: .39 },
+    { x: .8, y: .56 },
+  ], 100, 100);
+  assert.equal(line.length, 2);
+  assert.ok(Math.hypot((line[1].x - line[0].x) * 100, (line[1].y - line[0].y) * 100) > 75);
+
+  const circlePoints = Array.from({ length: 16 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { x: .5 + (.2 * Math.cos(angle)), y: .45 + (.2 * Math.sin(angle)) };
+  });
+  const circle = fitAssistedShape("circle", circlePoints, 200, 200);
+  assert.equal(circle.length, 2);
+  assert.ok(Math.abs(((circle[0].x + circle[1].x) / 2) - .5) < .001);
+  assert.ok(Math.abs(circle[0].y - .45) < .001);
+  assert.ok(Math.abs((circle[1].x - circle[0].x) - .4) < .001);
+  assert.equal(fitAssistedShape("circle", circlePoints.slice(0, 2), 200, 200), null);
+});
+
+test("renders assisted lines and circles as exact geometry", () => {
+  const calls = [];
+  const context = {
+    arc: (...args) => calls.push(["arc", ...args]),
+    beginPath: () => calls.push(["beginPath"]),
+    lineTo: (...args) => calls.push(["lineTo", ...args]),
+    moveTo: (...args) => calls.push(["moveTo", ...args]),
+    restore: () => calls.push(["restore"]),
+    save: () => calls.push(["save"]),
+    stroke: () => calls.push(["stroke"]),
+  };
+  const points = [{ x: .1, y: .1 }, { x: .4, y: .3 }];
+
+  assert.equal(shapeLength({ points }, 100, 200), 50);
+  renderStroke(context, { tool: "line", color: "#000", size: 4, points }, 100, 200);
+  assert.deepEqual(calls.find(([name]) => name === "moveTo"), ["moveTo", 10, 20]);
+  assert.deepEqual(calls.find(([name]) => name === "lineTo"), ["lineTo", 40, 60]);
+
+  calls.length = 0;
+  renderStroke(context, { tool: "circle", color: "#000", size: 4, points }, 100, 200);
+  assert.deepEqual(calls.find(([name]) => name === "arc"), ["arc", 25, 40, 25, 0, Math.PI * 2]);
+});
+
 test("formats coordinate labels at readable intervals", () => {
   assert.equal(coordinateLabelInterval(1, 13), 2);
   assert.equal(coordinateLabelInterval(.25, 13), 8);
@@ -62,6 +118,13 @@ test("validates and sanitizes imported projects", () => {
   assert.deepEqual(stroke.points, [{ x: 100, y: -100, pressure: 1 }]);
   assert.equal(stroke.size, 30);
   assert.equal(budget.remaining, 0);
+
+  const circle = sanitizeImportedStroke({
+    tool: "circle",
+    points: [{ x: .1, y: .2 }, { x: .5, y: .6 }],
+  }, { remaining: 2 });
+  assert.equal(circle.tool, "circle");
+  assert.equal(circle.points.length, 2);
 });
 
 test("generates unique imported canvas names", () => {

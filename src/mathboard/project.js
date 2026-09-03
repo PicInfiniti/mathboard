@@ -1,5 +1,6 @@
 export const PROJECT_FORMAT = "mathboard";
 const LEGACY_PROJECT_FORMAT = "math-1280-whiteboard";
+const STROKE_TOOLS = ["pen", "highlighter", "eraser", "line", "circle"];
 
 export function isSupportedProject(project) {
   return [PROJECT_FORMAT, LEGACY_PROJECT_FORMAT].includes(project?.format)
@@ -9,7 +10,7 @@ export function isSupportedProject(project) {
 }
 
 export function sanitizeImportedStroke(stroke, budget) {
-  if (!stroke || !["pen", "highlighter", "eraser"].includes(stroke.tool) || !Array.isArray(stroke.points) || budget.remaining <= 0) return null;
+  if (!stroke || !STROKE_TOOLS.includes(stroke.tool) || !Array.isArray(stroke.points) || budget.remaining <= 0) return null;
   const points = [];
   for (const point of stroke.points) {
     if (budget.remaining <= 0) break;

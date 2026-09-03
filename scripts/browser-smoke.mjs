@@ -61,6 +61,22 @@ async function check(name, expression) {
   process.stdout.write(`✓ ${name}\n`);
 }
 
+async function dragPointer(start, end) {
+  await command("Input.dispatchMouseEvent", { type: "mousePressed", x: start.x, y: start.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse" });
+  await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: end.x, y: end.y, button: "left", buttons: 1, pointerType: "mouse" });
+  await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: end.x, y: end.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" });
+}
+
+async function drawPointer(points) {
+  const [start, ...moves] = points;
+  await command("Input.dispatchMouseEvent", { type: "mousePressed", x: start.x, y: start.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse" });
+  for (const point of moves) {
+    await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: point.x, y: point.y, button: "left", buttons: 1, pointerType: "mouse" });
+  }
+  const end = moves.at(-1) || start;
+  await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: end.x, y: end.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" });
+}
+
 await command("Runtime.enable");
 await command("Page.enable");
 await waitFor('document.readyState === "complete" && document.querySelectorAll("[data-canvas-id]").length > 0');
@@ -144,7 +160,7 @@ await check("renames canvases", '[...document.querySelectorAll("[data-canvas-id]
 await evaluate('document.querySelector("#mathboard-canvas-delete").click(); document.querySelector("#mathboard-canvas-delete").click()');
 await check("deletes canvases", 'document.querySelectorAll("[data-canvas-id]").length === 2');
 
-await evaluate('document.querySelector("[data-panel-tab=draw]").click(); document.querySelector("[data-tool=pen]").click()');
+await evaluate('document.querySelector("[data-panel-tab=draw]").click()');
 const canvasBounds = await evaluate(`(() => {
   const canvas = document.querySelector("#mathboard-canvas");
   const bounds = canvas.getBoundingClientRect();
@@ -163,9 +179,36 @@ const canvasBounds = await evaluate(`(() => {
   }
   throw new Error("No unobstructed canvas point found");
 })()`);
-await command("Input.dispatchMouseEvent", { type: "mousePressed", x: canvasBounds.x, y: canvasBounds.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse" });
-await command("Input.dispatchMouseEvent", { type: "mouseMoved", x: canvasBounds.x + 60, y: canvasBounds.y + 40, button: "left", buttons: 1, pointerType: "mouse" });
-await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: canvasBounds.x + 60, y: canvasBounds.y + 40, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" });
+
+await evaluate('document.querySelector("[data-assist=line]").click()');
+await check("enables line draw assist below pen settings", `document.querySelector("[data-assist=line]").getAttribute("aria-pressed") === "true"
+  && document.querySelector("[data-tool=pen]").getAttribute("aria-pressed") === "true"
+  && document.querySelector(".mathboard-draw-assist").previousElementSibling.id === "mathboard-smoothing"`);
+await drawPointer([
+  canvasBounds,
+  { x: canvasBounds.x + 22, y: canvasBounds.y + 12 },
+  { x: canvasBounds.x + 48, y: canvasBounds.y + 17 },
+  { x: canvasBounds.x + 76, y: canvasBounds.y + 34 },
+  { x: canvasBounds.x + 100, y: canvasBounds.y + 40 },
+]);
+await check("commits an assisted line", 'document.querySelector("#mathboard-history-output").value.startsWith("1 of 1")');
+
+await evaluate('document.querySelector("[data-assist=circle]").click()');
+await check("enables circle draw assist without adding a toolbar tool", `document.querySelector("[data-assist=circle]").getAttribute("aria-pressed") === "true"
+  && document.querySelector("#mathboard-size-label").textContent === "Pen size"
+  && !document.querySelector("[data-tool=circle]")`);
+await drawPointer(Array.from({ length: 17 }, (_, index) => {
+  const angle = (index / 16) * Math.PI * 2;
+  return {
+    x: canvasBounds.x + 180 + (45 * Math.cos(angle)) + (index % 2 ? 2 : -2),
+    y: canvasBounds.y + 90 + (45 * Math.sin(angle)),
+  };
+}));
+await check("commits an assisted circle", 'document.querySelector("#mathboard-history-output").value.startsWith("2 of 2")');
+
+await evaluate('document.querySelector("[data-assist=off]").click()');
+await check("turns draw assist off", 'document.querySelector("[data-assist=off]").getAttribute("aria-pressed") === "true"');
+await dragPointer(canvasBounds, { x: canvasBounds.x + 60, y: canvasBounds.y + 40 });
 await new Promise((resolve) => setTimeout(resolve, 100));
 const drawingDebug = await evaluate(`(() => ({
   bounds: document.querySelector("#mathboard-canvas").getBoundingClientRect().toJSON(),
@@ -191,10 +234,10 @@ await evaluate('document.querySelector("#mathboard-history-close").click()');
 await check("closes stroke history", '!document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');
 
 await evaluate('document.querySelector("#mathboard-fullscreen").click()');
-await waitFor('document.fullscreenElement !== null || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
+await waitFor('document.querySelector(".mathboard-main").classList.contains("is-fullscreen") || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
 await check("enters fullscreen mode", 'document.querySelector(".mathboard-main").classList.contains("is-fullscreen") || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
 await evaluate('document.querySelector("#mathboard-fullscreen").click()');
-await waitFor('document.fullscreenElement === null && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
+await waitFor('document.fullscreenElement === null && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen") && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
 await check("exits fullscreen mode", '!document.querySelector(".mathboard-main").classList.contains("is-fullscreen")');
 
 await command("Browser.setDownloadBehavior", { behavior: "deny", eventsEnabled: true });

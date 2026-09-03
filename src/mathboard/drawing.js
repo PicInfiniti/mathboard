@@ -17,6 +17,34 @@ function midpoint(first, second) {
   };
 }
 
+export function shapeLength(stroke, width, height) {
+  if (!stroke.points?.[1]) return 0;
+  const [start, end] = stroke.points;
+  return Math.hypot((end.x - start.x) * width, (end.y - start.y) * height);
+}
+
+function renderLine(targetContext, stroke, width, height) {
+  const [start, end] = stroke.points;
+  targetContext.beginPath();
+  targetContext.moveTo(start.x * width, start.y * height);
+  targetContext.lineTo(end.x * width, end.y * height);
+  targetContext.stroke();
+}
+
+function renderCircle(targetContext, stroke, width, height) {
+  const [start, end] = stroke.points;
+  const startX = start.x * width;
+  const startY = start.y * height;
+  const endX = end.x * width;
+  const endY = end.y * height;
+  const centerX = (startX + endX) / 2;
+  const centerY = (startY + endY) / 2;
+  const radius = Math.hypot(endX - startX, endY - startY) / 2;
+  targetContext.beginPath();
+  targetContext.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  targetContext.stroke();
+}
+
 export function renderStroke(targetContext, stroke, width, height) {
   if (!stroke.points?.length) return;
   targetContext.save();
@@ -28,7 +56,11 @@ export function renderStroke(targetContext, stroke, width, height) {
   targetContext.lineCap = "round";
   targetContext.lineJoin = "round";
 
-  if (stroke.points.length === 1) {
+  if (stroke.tool === "line" && stroke.points.length > 1) {
+    renderLine(targetContext, stroke, width, height);
+  } else if (stroke.tool === "circle" && stroke.points.length > 1) {
+    renderCircle(targetContext, stroke, width, height);
+  } else if (stroke.points.length === 1) {
     const point = stroke.points[0];
     targetContext.beginPath();
     targetContext.arc(point.x * width, point.y * height, pressureAdjustedWidth(stroke, point) / 2, 0, Math.PI * 2);

@@ -1,7 +1,7 @@
 import { mathboardTemplate } from "./template.js";
 import { createCanvasExport } from "./canvas-export.js";
 import { coordinateLabelInterval, formatCoordinate } from "./coordinates.js";
-import { renderStroke, strokeWidth } from "./drawing.js";
+import { renderStroke, shapeLength, strokeWidth } from "./drawing.js";
 import { createPdfBlob } from "./pdf.js";
 import { getMathBoardElements } from "./dom.js";
 import {
@@ -11,10 +11,13 @@ import {
   uniqueImportedName,
 } from "./project.js";
 import { createProjectStorage } from "./storage.js";
+import { fitAssistedShape } from "./shape-assist.js";
 import {
   DRAWING_TOOLS,
   MAX_ZOOM,
   MIN_ZOOM,
+  SHAPE_TOOLS,
+  TOOLS,
   ZOOM_LEVELS,
 } from "./config.js";
 import {
@@ -31,6 +34,7 @@ document.querySelector("#app").innerHTML = mathboardTemplate(import.meta.env.BAS
 const projectStorage = createProjectStorage();
 
 const {
+  assistButtons,
   board,
   canvas,
   toolButtons,
@@ -550,6 +554,7 @@ function syncControls() {
   toolButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.tool === state.tool)));
   colorButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.color === state.color)));
   gridButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.grid === state.grid)));
+  assistButtons.forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.assist === (state.assistTool || "off"))));
   const activeSizeTool = sizeControlTool();
   const activeToolSize = toolSize(activeSizeTool);
   sizeInput.value = activeToolSize;
@@ -846,13 +851,16 @@ function startStroke(event) {
     return;
   }
   const strokeTool = usingPenEraser ? "eraser" : state.tool;
+  const startPoint = normalizedPoint(event);
+  const assistTool = strokeTool === "pen" && SHAPE_TOOLS.includes(state.assistTool) ? state.assistTool : null;
   activeStroke = {
-    tool: strokeTool,
+    tool: assistTool ? "pen" : strokeTool,
+    assistTool,
     color: state.color,
     size: toolSize(strokeTool),
     smooth: state.smooth,
     pointerType: activePointerType,
-    points: [normalizedPoint(event)],
+    points: [startPoint],
   };
   canvas.setPointerCapture(event.pointerId);
   updateEraserPreview(event);
@@ -911,13 +919,26 @@ function finishStroke(event) {
   if (!activeStroke || event.pointerId !== activePointerId) return;
   const finishedPointerType = activePointerType;
   const usedTemporaryEraser = activeStroke.tool === "eraser" && state.tool !== "eraser";
-  state.strokes.push(activeStroke);
+  const bounds = canvas.getBoundingClientRect();
+  if (activeStroke.assistTool) {
+    if (event.type === "pointerup") {
+      const point = normalizedPoint(event);
+      const previous = activeStroke.points.at(-1);
+      if (!previous || distanceBetween(point, previous) > 0.0012) activeStroke.points.push(point);
+    }
+    const fittedPoints = fitAssistedShape(activeStroke.assistTool, activeStroke.points, bounds.width, bounds.height);
+    activeStroke.tool = activeStroke.assistTool;
+    activeStroke.points = fittedPoints || [];
+    delete activeStroke.assistTool;
+  }
+  const shouldCommit = !SHAPE_TOOLS.includes(activeStroke.tool) || shapeLength(activeStroke, bounds.width, bounds.height) >= 2;
+  if (shouldCommit) state.strokes.push(activeStroke);
   activeStroke = null;
   activePointerId = null;
   activePointerType = null;
-  redoStack = [];
+  if (shouldCommit) redoStack = [];
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-  saveState();
+  if (shouldCommit) saveState();
   renderBoard();
   if (finishedPointerType === "touch" || usedTemporaryEraser) eraserPreview.classList.remove("is-visible");
 }
@@ -1035,6 +1056,7 @@ function projectPayload() {
     activeCanvasId: state.activeCanvasId,
     settings: {
       tool: state.tool,
+      assistTool: state.assistTool,
       color: state.color,
       size: toolSize(),
       toolSizes: state.toolSizes,
@@ -1170,7 +1192,8 @@ async function importProject(file) {
     const importedActiveId = importedIdMap.get(project.activeCanvasId) || importedCanvases[0].id;
     state.activeCanvasId = importedActiveId;
     const importedSettings = project.settings || {};
-    if (["pen", "highlighter", "eraser", "hand", "zoom"].includes(importedSettings.tool)) state.tool = importedSettings.tool;
+    if (TOOLS.includes(importedSettings.tool)) state.tool = importedSettings.tool;
+    state.assistTool = SHAPE_TOOLS.includes(importedSettings.assistTool) ? importedSettings.assistTool : null;
     if (typeof importedSettings.color === "string") state.color = importedSettings.color.slice(0, 64);
     if (importedSettings.toolSizes || Number.isFinite(Number(importedSettings.size))) {
       state.toolSizes = normalizeToolSizes(importedSettings.toolSizes, importedSettings.size);
@@ -1196,10 +1219,21 @@ async function importProject(file) {
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     state.tool = button.dataset.tool;
+    if (state.tool !== "pen") state.assistTool = null;
     if (DRAWING_TOOLS.includes(state.tool)) state.lastDrawingTool = state.tool;
     syncControls();
     saveState();
     announce(`${button.textContent.trim()} selected.`);
+  });
+});
+
+assistButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.assistTool = SHAPE_TOOLS.includes(button.dataset.assist) ? button.dataset.assist : null;
+    if (state.assistTool) state.tool = "pen";
+    syncControls();
+    saveState();
+    announce(state.assistTool ? `${button.textContent.trim()} assist enabled.` : "Draw assist turned off.");
   });
 });
 

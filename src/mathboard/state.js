@@ -1,4 +1,4 @@
-import { DRAWING_TOOLS, MAX_ZOOM, MIN_ZOOM } from "./config.js";
+import { DRAWING_TOOLS, MAX_ZOOM, MIN_ZOOM, SHAPE_TOOLS, TOOLS } from "./config.js";
 
 export function clampStrokeSize(value, fallback = 5) {
   return Number.isFinite(Number(value)) ? Math.min(30, Math.max(1, Number(value))) : fallback;
@@ -31,6 +31,7 @@ export function createInitialState() {
   const firstCanvas = createCanvasRecord("Canvas 1");
   return {
     tool: "pen",
+    assistTool: null,
     color: "#071d33",
     toolSizes: normalizeToolSizes(),
     lastDrawingTool: "pen",
@@ -54,7 +55,7 @@ export function hydrateState(saved, currentState) {
     ? saved.canvases.map(normalizeCanvasRecord)
     : [createCanvasRecord("Canvas 1", saved)];
   const activeCanvas = savedCanvases.find((item) => item.id === saved.activeCanvasId) || savedCanvases[0];
-  const restoredTool = ["pen", "highlighter", "eraser", "hand", "zoom"].includes(saved.tool) ? saved.tool : currentState.tool;
+  const restoredTool = TOOLS.includes(saved.tool) ? saved.tool : currentState.tool;
   const lastDrawingTool = DRAWING_TOOLS.includes(saved.lastDrawingTool)
     ? saved.lastDrawingTool
     : (DRAWING_TOOLS.includes(restoredTool) ? restoredTool : "pen");
@@ -62,6 +63,7 @@ export function hydrateState(saved, currentState) {
     redoStack: activeCanvas.redoStrokes,
     state: {
       tool: restoredTool,
+      assistTool: SHAPE_TOOLS.includes(saved.assistTool) ? saved.assistTool : null,
       color: typeof saved.color === "string" ? saved.color : currentState.color,
       toolSizes: normalizeToolSizes(saved.toolSizes, saved.size),
       lastDrawingTool,

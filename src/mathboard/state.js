@@ -31,7 +31,7 @@ export function createInitialState() {
   const firstCanvas = createCanvasRecord("Canvas 1");
   return {
     tool: "pen",
-    assistTool: null,
+    drawAssist: false,
     color: "#071d33",
     toolSizes: normalizeToolSizes(),
     lastDrawingTool: "pen",
@@ -63,7 +63,7 @@ export function hydrateState(saved, currentState) {
     redoStack: activeCanvas.redoStrokes,
     state: {
       tool: restoredTool,
-      assistTool: SHAPE_TOOLS.includes(saved.assistTool) ? saved.assistTool : null,
+      drawAssist: saved.drawAssist === true || SHAPE_TOOLS.includes(saved.assistTool),
       color: typeof saved.color === "string" ? saved.color : currentState.color,
       toolSizes: normalizeToolSizes(saved.toolSizes, saved.size),
       lastDrawingTool,

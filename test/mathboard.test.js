@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { coordinateLabelInterval, formatCoordinate } from "../src/mathboard/coordinates.js";
 import { renderStroke, shapeLength } from "../src/mathboard/drawing.js";
-import { fitAssistedShape } from "../src/mathboard/shape-assist.js";
+import { recognizeAssistedShape } from "../src/mathboard/shape-assist.js";
 import {
   isSupportedProject,
   PROJECT_FORMAT,
@@ -42,35 +42,82 @@ test("normalizes tool sizes and persisted canvas settings", () => {
   assert.equal(restored.state.canvases[0].name, "Notes");
 });
 
-test("restores a valid draw assist setting", () => {
+test("restores current and legacy draw assist settings", () => {
   const currentState = createInitialState();
-  const restored = hydrateState({ ...currentState, assistTool: "circle" }, currentState);
-  const invalid = hydrateState({ ...currentState, assistTool: "triangle" }, currentState);
+  const restored = hydrateState({ ...currentState, drawAssist: true }, currentState);
+  const migrated = hydrateState({ ...currentState, assistTool: "circle" }, currentState);
+  const disabled = hydrateState({ ...currentState, assistTool: "triangle" }, currentState);
 
-  assert.equal(restored.state.assistTool, "circle");
-  assert.equal(invalid.state.assistTool, null);
+  assert.equal(restored.state.drawAssist, true);
+  assert.equal(migrated.state.drawAssist, true);
+  assert.equal(disabled.state.drawAssist, false);
 });
 
-test("fits rough freehand gestures into assisted shapes", () => {
-  const line = fitAssistedShape("line", [
+test("automatically recognizes confident line and circle gestures", () => {
+  const line = recognizeAssistedShape([
     { x: .1, y: .2 },
     { x: .3, y: .31 },
     { x: .5, y: .39 },
     { x: .8, y: .56 },
   ], 100, 100);
-  assert.equal(line.length, 2);
-  assert.ok(Math.hypot((line[1].x - line[0].x) * 100, (line[1].y - line[0].y) * 100) > 75);
+  assert.equal(line.tool, "line");
+  assert.equal(line.points.length, 2);
+  assert.ok(Math.hypot((line.points[1].x - line.points[0].x) * 100, (line.points[1].y - line.points[0].y) * 100) > 75);
 
   const circlePoints = Array.from({ length: 16 }, (_, index) => {
     const angle = (index / 16) * Math.PI * 2;
-    return { x: .5 + (.2 * Math.cos(angle)), y: .45 + (.2 * Math.sin(angle)) };
+    return {
+      x: .5 + (.2 * Math.cos(angle)) + (index % 2 ? .01 : -.01),
+      y: .45 + (.2 * Math.sin(angle)),
+    };
   });
-  const circle = fitAssistedShape("circle", circlePoints, 200, 200);
-  assert.equal(circle.length, 2);
-  assert.ok(Math.abs(((circle[0].x + circle[1].x) / 2) - .5) < .001);
-  assert.ok(Math.abs(circle[0].y - .45) < .001);
-  assert.ok(Math.abs((circle[1].x - circle[0].x) - .4) < .001);
-  assert.equal(fitAssistedShape("circle", circlePoints.slice(0, 2), 200, 200), null);
+  const circle = recognizeAssistedShape(circlePoints, 200, 200);
+  assert.equal(circle.tool, "circle");
+  assert.equal(circle.points.length, 2);
+  assert.ok(Math.abs(((circle.points[0].x + circle.points[1].x) / 2) - .5) < .015);
+  assert.ok(Math.abs(circle.points[0].y - .45) < .015);
+  assert.ok(Math.abs((circle.points[1].x - circle.points[0].x) - .4) < .015);
+
+  const wideOval = Array.from({ length: 25 }, (_, index) => {
+    const angle = (index / 24) * Math.PI * 2.12;
+    return {
+      x: .5 + (.3 * Math.cos(angle)) + (index % 3 === 0 ? .006 : 0),
+      y: .5 + (.13 * Math.sin(angle)) + (index % 4 === 0 ? -.004 : 0),
+    };
+  });
+  const ovalAsCircle = recognizeAssistedShape(wideOval, 400, 400);
+  assert.equal(ovalAsCircle.tool, "circle");
+  assert.equal(ovalAsCircle.points.length, 2);
+});
+
+test("leaves handwritten zeroes, ones, and ambiguous strokes freehand", () => {
+  const zero = Array.from({ length: 17 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { x: .25 + (.07 * Math.cos(angle)), y: .3 + (.15 * Math.sin(angle)) };
+  });
+  const one = [
+    { x: .18, y: .22 },
+    { x: .22, y: .17 },
+    { x: .22, y: .42 },
+    { x: .18, y: .45 },
+    { x: .27, y: .45 },
+  ];
+  const compactRoundZero = Array.from({ length: 17 }, (_, index) => {
+    const angle = (index / 16) * Math.PI * 2;
+    return { x: .55 + (.08 * Math.cos(angle)), y: .3 + (.08 * Math.sin(angle)) };
+  });
+  const simpleOne = [
+    { x: .7, y: .2 },
+    { x: .7, y: .27 },
+    { x: .7, y: .34 },
+    { x: .7, y: .4 },
+  ];
+
+  assert.equal(recognizeAssistedShape(zero, 200, 200), null);
+  assert.equal(recognizeAssistedShape(compactRoundZero, 200, 200), null);
+  assert.equal(recognizeAssistedShape(one, 200, 200), null);
+  assert.equal(recognizeAssistedShape(simpleOne, 200, 200), null);
+  assert.equal(recognizeAssistedShape([{ x: .1, y: .1 }, { x: .2, y: .2 }], 200, 200), null);
 });
 
 test("renders assisted lines and circles as exact geometry", () => {

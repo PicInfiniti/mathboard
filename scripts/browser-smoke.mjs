@@ -180,8 +180,8 @@ const canvasBounds = await evaluate(`(() => {
   throw new Error("No unobstructed canvas point found");
 })()`);
 
-await evaluate('document.querySelector("[data-assist=line]").click()');
-await check("enables line draw assist below pen settings", `document.querySelector("[data-assist=line]").getAttribute("aria-pressed") === "true"
+await evaluate('document.querySelector("#mathboard-draw-assist").click()');
+await check("enables automatic draw assist below pen settings", `document.querySelector("#mathboard-draw-assist").getAttribute("aria-pressed") === "true"
   && document.querySelector("[data-tool=pen]").getAttribute("aria-pressed") === "true"
   && document.querySelector(".mathboard-draw-assist").previousElementSibling.id === "mathboard-smoothing"`);
 await drawPointer([
@@ -193,21 +193,29 @@ await drawPointer([
 ]);
 await check("commits an assisted line", 'document.querySelector("#mathboard-history-output").value.startsWith("1 of 1")');
 
-await evaluate('document.querySelector("[data-assist=circle]").click()');
-await check("enables circle draw assist without adding a toolbar tool", `document.querySelector("[data-assist=circle]").getAttribute("aria-pressed") === "true"
+await check("keeps automatic assist active without adding shape tools", `document.querySelector("#mathboard-draw-assist").getAttribute("aria-pressed") === "true"
   && document.querySelector("#mathboard-size-label").textContent === "Pen size"
   && !document.querySelector("[data-tool=circle]")`);
-await drawPointer(Array.from({ length: 17 }, (_, index) => {
-  const angle = (index / 16) * Math.PI * 2;
+await evaluate(`(() => {
+  const originalArc = CanvasRenderingContext2D.prototype.arc;
+  window.__mathboardAssistedArcCalls = 0;
+  CanvasRenderingContext2D.prototype.arc = function (...args) {
+    window.__mathboardAssistedArcCalls += 1;
+    return originalArc.apply(this, args);
+  };
+})()`);
+await drawPointer(Array.from({ length: 25 }, (_, index) => {
+  const angle = (index / 24) * Math.PI * 2.12;
   return {
-    x: canvasBounds.x + 180 + (45 * Math.cos(angle)) + (index % 2 ? 2 : -2),
-    y: canvasBounds.y + 90 + (45 * Math.sin(angle)),
+    x: canvasBounds.x + 180 + (65 * Math.cos(angle)) + (index % 2 ? 2 : -2),
+    y: canvasBounds.y + 90 + (32 * Math.sin(angle)),
   };
 }));
-await check("commits an assisted circle", 'document.querySelector("#mathboard-history-output").value.startsWith("2 of 2")');
+await check("fits a wide overdrawn oval to a circle", `document.querySelector("#mathboard-history-output").value.startsWith("2 of 2")
+  && window.__mathboardAssistedArcCalls > 0`);
 
-await evaluate('document.querySelector("[data-assist=off]").click()');
-await check("turns draw assist off", 'document.querySelector("[data-assist=off]").getAttribute("aria-pressed") === "true"');
+await evaluate('document.querySelector("#mathboard-draw-assist").click()');
+await check("turns draw assist off", 'document.querySelector("#mathboard-draw-assist").getAttribute("aria-pressed") === "false"');
 await dragPointer(canvasBounds, { x: canvasBounds.x + 60, y: canvasBounds.y + 40 });
 await new Promise((resolve) => setTimeout(resolve, 100));
 const drawingDebug = await evaluate(`(() => ({

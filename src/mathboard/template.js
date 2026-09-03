@@ -58,17 +58,10 @@ export function mathboardTemplate(baseUrl) {
             <span><strong>Smooth curves</strong><small>Round out pen movement</small></span>
             <span class="mathboard-smoothing__switch" aria-hidden="true"><i></i></span>
           </button>
-          <div class="mathboard-draw-assist" role="group" aria-labelledby="mathboard-draw-assist-label">
-            <div class="mathboard-draw-assist__label" id="mathboard-draw-assist-label">
-              <strong>Draw assist</strong>
-              <small>Sketch freehand, then release</small>
-            </div>
-            <div class="mathboard-draw-assist__options">
-              <button type="button" data-assist="off" aria-pressed="true">Off</button>
-              <button type="button" data-assist="line" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5" /></svg>Line</button>
-              <button type="button" data-assist="circle" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" /></svg>Circle</button>
-            </div>
-          </div>
+          <button class="mathboard-smoothing mathboard-draw-assist" id="mathboard-draw-assist" type="button" aria-pressed="false">
+            <span><strong>Draw assist</strong><small>Recognize lines and circles</small></span>
+            <span class="mathboard-smoothing__switch" aria-hidden="true"><i></i></span>
+          </button>
         </div>
 
         <fieldset class="mathboard-tool-group mathboard-tool-group--background" data-panel-section="canvas">
@@ -132,7 +125,7 @@ export function mathboardTemplate(baseUrl) {
 
         <details class="mathboard-help">
           <summary>Quick help</summary>
-          <p>Turn on Line or Circle under Draw Assist, sketch the shape freehand, and release to clean it up. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
+          <p>Turn on Draw Assist to automatically clean up confident line and circle gestures when you release; handwriting and uncertain shapes stay freehand. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
         </details>
       </aside>
 

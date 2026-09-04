@@ -5,6 +5,15 @@ import { coordinateLabelInterval, formatCoordinate } from "../src/mathboard/coor
 import { renderStroke, shapeLength } from "../src/mathboard/drawing.js";
 import { recognizeAssistedShape } from "../src/mathboard/shape-assist.js";
 import {
+  applyTransformEntry,
+  findStrokeAt,
+  oppositeAnchor,
+  scaledPoints,
+  selectionGeometry,
+  strokeBounds,
+  translatedPoints,
+} from "../src/mathboard/selection.js";
+import {
   isSupportedProject,
   PROJECT_FORMAT,
   sanitizeImportedStroke,
@@ -141,6 +150,48 @@ test("renders assisted lines and circles as exact geometry", () => {
   calls.length = 0;
   renderStroke(context, { tool: "circle", color: "#000", size: 4, points }, 100, 200);
   assert.deepEqual(calls.find(([name]) => name === "arc"), ["arc", 25, 40, 25, 0, Math.PI * 2]);
+});
+
+test("selects, moves, and proportionally resizes stroke objects", () => {
+  const line = {
+    tool: "line",
+    size: 4,
+    points: [{ x: .1, y: .2 }, { x: .4, y: .5 }],
+  };
+  const circle = {
+    tool: "circle",
+    size: 4,
+    points: [{ x: .55, y: .5 }, { x: .85, y: .5 }],
+  };
+
+  assert.equal(findStrokeAt([line, circle], { x: 25, y: 35 }, 100, 100, 1), 0);
+  assert.equal(findStrokeAt([line, circle], { x: 70, y: 35 }, 100, 100, 1), 1);
+  assert.equal(findStrokeAt([line, circle], { x: 5, y: 90 }, 100, 100, 1), null);
+
+  assert.deepEqual(strokeBounds(circle, 100, 100), { left: 55, top: 35, right: 85, bottom: 65 });
+  const geometry = selectionGeometry(line, 100, 100, 1);
+  const anchor = oppositeAnchor(geometry.bounds, "se");
+  assert.deepEqual(anchor, { x: 10, y: 20 });
+
+  const moved = translatedPoints(line.points, 10, -5, 100, 100);
+  assert.ok(Math.abs(moved[0].x - .2) < .000001 && Math.abs(moved[0].y - .15) < .000001);
+  assert.ok(Math.abs(moved[1].x - .5) < .000001 && Math.abs(moved[1].y - .45) < .000001);
+
+  const resized = scaledPoints(line.points, anchor, 2, 100, 100);
+  assert.ok(Math.abs(resized[0].x - .1) < .000001 && Math.abs(resized[0].y - .2) < .000001);
+  assert.ok(Math.abs(resized[1].x - .7) < .000001 && Math.abs(resized[1].y - .8) < .000001);
+
+  const strokes = [{ ...line, points: resized }];
+  const historyEntry = {
+    tool: "transform",
+    targetIndex: 0,
+    beforePoints: line.points,
+    afterPoints: resized,
+  };
+  assert.equal(applyTransformEntry(strokes, historyEntry, "beforePoints"), true);
+  assert.deepEqual(strokes[0].points, line.points);
+  assert.equal(applyTransformEntry(strokes, historyEntry, "afterPoints"), true);
+  assert.deepEqual(strokes[0].points, resized);
 });
 
 test("formats coordinate labels at readable intervals", () => {

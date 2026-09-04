@@ -9,8 +9,9 @@ A responsive visual workspace for sketching graphs, diagrams, equations, and ide
 - Mouse, touch, and pressure-sensitive stylus drawing
 - Independent pen, highlighter, and eraser sizes
 - Automatic, confidence-based line and circle cleanup with Draw Assist
+- Stroke selection with drag-to-move and proportional corner resizing
 - Blank, square-grid, and numbered coordinate-plane backgrounds
-- Canvas panning, area zoom, undo, redo, and stroke-history scrubbing
+- Canvas panning, area zoom, undo, redo, and edit-history scrubbing
 - Named, duplicable, reorderable canvases with automatic browser storage
 - PNG and PDF downloads plus project import, export, and sharing
 - Responsive portrait, landscape, and distraction-free full-screen layouts

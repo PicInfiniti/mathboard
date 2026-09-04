@@ -214,8 +214,35 @@ await drawPointer(Array.from({ length: 25 }, (_, index) => {
 await check("fits a wide overdrawn oval to a circle", `document.querySelector("#mathboard-history-output").value.startsWith("2 of 2")
   && window.__mathboardAssistedArcCalls > 0`);
 
+await evaluate(`(() => {
+  const originalStrokeRect = CanvasRenderingContext2D.prototype.strokeRect;
+  window.__mathboardSelectionBoxes = 0;
+  CanvasRenderingContext2D.prototype.strokeRect = function (...args) {
+    window.__mathboardSelectionBoxes += 1;
+    return originalStrokeRect.apply(this, args);
+  };
+  document.querySelector("[data-tool=select]").click();
+})()`);
+await check("enables the Select tool", 'document.querySelector("[data-tool=select]").getAttribute("aria-pressed") === "true"');
+await dragPointer(
+  { x: canvasBounds.x + 50, y: canvasBounds.y + 20 },
+  { x: canvasBounds.x + 80, y: canvasBounds.y + 50 },
+);
+await check("selects and moves an object", `window.__mathboardSelectionBoxes > 0
+  && document.querySelector("#mathboard-history-output").value.startsWith("3 of 3")`);
+await dragPointer(
+  { x: canvasBounds.x + 141, y: canvasBounds.y + 81 },
+  { x: canvasBounds.x + 190, y: canvasBounds.y + 130 },
+);
+await check("resizes the selected object from its corner", 'document.querySelector("#mathboard-history-output").value.startsWith("4 of 4")');
+await evaluate('document.querySelector("#mathboard-undo").click()');
+await check("undoes an object resize", 'document.querySelector("#mathboard-history-output").value.startsWith("3 of 4")');
+await evaluate('document.querySelector("#mathboard-redo").click()');
+await check("redoes an object resize", 'document.querySelector("#mathboard-history-output").value.startsWith("4 of 4")');
+
 await evaluate('document.querySelector("#mathboard-draw-assist").click()');
 await check("turns draw assist off", 'document.querySelector("#mathboard-draw-assist").getAttribute("aria-pressed") === "false"');
+await evaluate('document.querySelector("[data-tool=pen]").click()');
 await dragPointer(canvasBounds, { x: canvasBounds.x + 60, y: canvasBounds.y + 40 });
 await new Promise((resolve) => setTimeout(resolve, 100));
 const drawingDebug = await evaluate(`(() => ({

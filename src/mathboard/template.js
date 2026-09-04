@@ -32,6 +32,7 @@ export function mathboardTemplate(baseUrl) {
             <button class="mathboard-tool" type="button" data-tool="pen" aria-pressed="true"><span aria-hidden="true">✎</span><span>Pen</span></button>
             <button class="mathboard-tool" type="button" data-tool="highlighter" aria-pressed="false"><span aria-hidden="true">▰</span><span>Highlight</span></button>
             <button class="mathboard-tool" type="button" data-tool="eraser" aria-pressed="false"><span aria-hidden="true">◇</span><span>Eraser</span></button>
+            <button class="mathboard-tool" type="button" data-tool="select" aria-pressed="false"><span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 3 13 9-6 1.5L9.5 19z" /></svg></span><span>Select</span></button>
             <button class="mathboard-tool" type="button" data-tool="hand" aria-pressed="false"><span aria-hidden="true">✋</span><span>Move</span></button>
             <button class="mathboard-tool" type="button" data-tool="zoom" aria-pressed="false"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="5" /><path d="m14 14 5 5M7.5 10h5" /></svg></span><span>Zoom</span></button>
           </div>
@@ -125,7 +126,7 @@ export function mathboardTemplate(baseUrl) {
 
         <details class="mathboard-help">
           <summary>Quick help</summary>
-          <p>Turn on Draw Assist to automatically clean up confident line and circle gestures when you release; handwriting and uncertain shapes stay freehand. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
+          <p>Use Select to click a mark, drag it to move, or drag a corner handle to resize it. Turn on Draw Assist to automatically clean up confident line and circle gestures when you release; handwriting and uncertain shapes stay freehand. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
         </details>
       </aside>
 
@@ -156,7 +157,7 @@ export function mathboardTemplate(baseUrl) {
           class="mathboard-canvas"
           id="mathboard-canvas"
           tabindex="0"
-          aria-label="MathBoard canvas. Draw with a mouse, finger, or stylus. Use the toolbar to change tools."
+          aria-label="MathBoard canvas. Draw or select objects with a mouse, finger, or stylus. Use the toolbar to change tools."
         ></canvas>
         <span class="mathboard-eraser-preview" id="mathboard-eraser-preview" aria-hidden="true"></span>
         <p class="mathboard-board__hint" aria-hidden="true">Draw anywhere to begin</p>
@@ -166,10 +167,10 @@ export function mathboardTemplate(baseUrl) {
           <button id="mathboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view"><span aria-hidden="true">↺</span></button>
           <button id="mathboard-zoom-in" type="button" aria-label="Zoom in" title="Zoom in">+</button>
         </div>
-        <section class="mathboard-history-scrubber" id="mathboard-history-scrubber" aria-label="Stroke history" aria-hidden="true">
+        <section class="mathboard-history-scrubber" id="mathboard-history-scrubber" aria-label="Edit history" aria-hidden="true">
           <div class="mathboard-history-scrubber__header">
-            <div><strong>Stroke history</strong><span>Travel without clearing the board</span></div>
-            <button id="mathboard-history-close" type="button" aria-label="Close stroke history" title="Close history">×</button>
+            <div><strong>Edit history</strong><span>Review drawing and object changes</span></div>
+            <button id="mathboard-history-close" type="button" aria-label="Close edit history" title="Close history">×</button>
           </div>
           <div class="mathboard-history-scrubber__controls">
             <button id="mathboard-history-start" type="button" aria-label="Jump to the beginning" title="Beginning" disabled>
@@ -182,7 +183,7 @@ export function mathboardTemplate(baseUrl) {
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6l7 6-7 6" /></svg>
             </button>
           </div>
-          <output id="mathboard-history-output" for="mathboard-history-range">No strokes yet</output>
+          <output id="mathboard-history-output" for="mathboard-history-range">No changes yet</output>
         </section>
         <div class="mathboard-fullscreen-actions" aria-label="Full-screen board actions">
           <button id="mathboard-fullscreen-undo" type="button" aria-label="Undo" title="Undo" disabled>
@@ -191,7 +192,7 @@ export function mathboardTemplate(baseUrl) {
           <button id="mathboard-fullscreen-redo" type="button" aria-label="Redo" title="Redo" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5M19 12h-8a6 6 0 0 0-6 6" /></svg>
           </button>
-          <button id="mathboard-fullscreen-history" type="button" aria-label="Open stroke history" aria-expanded="false" aria-controls="mathboard-history-scrubber" title="Stroke history" disabled>
+          <button id="mathboard-fullscreen-history" type="button" aria-label="Open edit history" aria-expanded="false" aria-controls="mathboard-history-scrubber" title="Edit history" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7M4 4v4.7h4.7M12 7v5l3 2" /></svg>
           </button>
           <button class="mathboard-fullscreen-clear" id="mathboard-fullscreen-clear" type="button" aria-label="Clear board" title="Clear board">

@@ -251,6 +251,18 @@
   &.is-zooming
     cursor: zoom-in
 
+  &.is-selecting
+    cursor: default
+
+  &[data-selection-cursor='move']
+    cursor: move
+
+  &[data-selection-cursor='nwse-resize']
+    cursor: nwse-resize
+
+  &[data-selection-cursor='nesw-resize']
+    cursor: nesw-resize
+
 .mathboard-axis-labels
   position: absolute
   z-index: 0

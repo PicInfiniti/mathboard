@@ -126,7 +126,7 @@ export function mathboardTemplate(baseUrl) {
 
         <details class="mathboard-help">
           <summary>Quick help</summary>
-          <p>Use Select to click a mark, drag it to move, or drag a corner handle to resize it. Turn on Draw Assist to automatically clean up confident line and circle gestures when you release; handwriting and uncertain shapes stay freehand. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. Press <strong>Ctrl/⌘ + Z</strong> to undo.</p>
+          <p>Use Select to click a mark, drag it to move, or drag a corner handle to resize it. For a selected mark, press <strong>D</strong> to duplicate, <strong>X</strong> to cut, <strong>Y</strong> to copy, <strong>P</strong> to paste, or <strong>Delete</strong> to remove it. Press <strong>U</strong> to undo, <strong>R</strong> to redo, <strong>H</strong> to toggle history, and <strong>F</strong> for full screen. Right-click a mark or empty board space for more actions. Turn on Draw Assist to automatically clean up confident line and circle gestures when you release; handwriting and uncertain shapes stay freehand. Use Move to pan and Zoom to frame a precise area. Use − or + to change scale, or ↺ to reset. Drag canvas tabs to reorder them; use <strong>Alt + ←/→</strong> from the keyboard. Pen pressure and stylus eraser tips are supported. <strong>Ctrl/⌘ + Z</strong> also undoes.</p>
         </details>
       </aside>
 
@@ -162,6 +162,7 @@ export function mathboardTemplate(baseUrl) {
         <span class="mathboard-eraser-preview" id="mathboard-eraser-preview" aria-hidden="true"></span>
         <p class="mathboard-board__hint" aria-hidden="true">Draw anywhere to begin</p>
         <p class="mathboard-status" id="mathboard-status" role="status" aria-live="polite"></p>
+        <div class="mathboard-context-menu" id="mathboard-context-menu" role="menu" aria-label="Board actions" hidden></div>
         <div class="mathboard-zoom-controls" aria-label="Zoom controls">
           <button id="mathboard-zoom-out" type="button" aria-label="Zoom out" title="Zoom out">−</button>
           <button id="mathboard-zoom-reset" type="button" aria-label="Reset zoom and center canvas" title="Reset view"><span aria-hidden="true">↺</span></button>

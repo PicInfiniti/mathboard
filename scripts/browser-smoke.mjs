@@ -77,6 +77,16 @@ async function drawPointer(points) {
   await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: end.x, y: end.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" });
 }
 
+async function pressKey(key, code = `Key${key.toUpperCase()}`) {
+  await command("Input.dispatchKeyEvent", { type: "keyDown", key, code });
+  await command("Input.dispatchKeyEvent", { type: "keyUp", key, code });
+}
+
+async function rightClick(point) {
+  await command("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "right", buttons: 2, clickCount: 1, pointerType: "mouse" });
+  await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "right", buttons: 0, clickCount: 1, pointerType: "mouse" });
+}
+
 await command("Runtime.enable");
 await command("Page.enable");
 await waitFor('document.readyState === "complete" && document.querySelectorAll("[data-canvas-id]").length > 0');
@@ -365,21 +375,85 @@ await check("scales erased gaps proportionally when resizing objects", `(() => {
     && largestGap < 12;
 })()`);
 
-await evaluate('document.querySelector("#mathboard-history-toggle").click()');
-await check("opens stroke history", 'document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');
+await pressKey("y");
+await check("copies a selected object with Y", `document.querySelector("#mathboard-status").textContent.includes("Object copied")
+  && document.querySelector("#mathboard-history-output").value.startsWith("4 of 4")`);
+await pressKey("x");
+await check("cuts a selected object with X", `document.querySelector("#mathboard-status").textContent.includes("Object cut")
+  && document.querySelector("#mathboard-history-output").value.startsWith("5 of 5")
+  && !document.querySelector("#mathboard-board").classList.contains("has-ink")`);
+await pressKey("p");
+const pastedHitPoint = await evaluate(`(() => {
+  const canvas = document.querySelector("#mathboard-canvas");
+  const bounds = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const [left, top, width, height] = window.__mathboardLastSelectionBox;
+  const y = top + (height / 2);
+  for (let x = left + 9; x < left + width - 9; x += 1) {
+    const alpha = canvas.getContext("2d").getImageData(Math.round(x * scaleX), Math.round(y * scaleY), 1, 1).data[3];
+    const clientPoint = { x: bounds.left + x, y: bounds.top + y };
+    if (alpha > 20 && document.elementFromPoint(clientPoint.x, clientPoint.y) === canvas) return clientPoint;
+  }
+  throw new Error("No visible pasted stroke point found");
+})()`);
+await check("pastes a copied object with P", `document.querySelector("#mathboard-status").textContent.includes("Object pasted")
+  && document.querySelector("#mathboard-history-output").value.startsWith("6 of 6")
+  && document.querySelector("#mathboard-board").classList.contains("has-ink")`);
+await pressKey("d");
+await check("duplicates a selected object with D", `document.querySelector("#mathboard-status").textContent.includes("Object duplicated")
+  && document.querySelector("#mathboard-history-output").value.startsWith("7 of 7")
+  && document.querySelector("#mathboard-board").classList.contains("has-ink")`);
+await pressKey("u");
+await check("undoes with U", 'document.querySelector("#mathboard-history-output").value.startsWith("6 of 7")');
+await pressKey("r");
+await check("redoes with R", 'document.querySelector("#mathboard-history-output").value.startsWith("7 of 7")');
+await rightClick(pastedHitPoint);
+await pressKey("Escape", "Escape");
+await pressKey("Delete", "Delete");
+await check("deletes a selected object with Delete", `document.querySelector("#mathboard-status").textContent.includes("Object deleted")
+  && document.querySelector("#mathboard-history-output").value.startsWith("8 of 8")`);
+await pressKey("u");
+await rightClick(pastedHitPoint);
+await check("opens selected-object actions on right click", `(() => {
+  const menu = document.querySelector("#mathboard-context-menu");
+  return !menu.hidden
+    && menu.getAttribute("aria-label") === "Selected object actions"
+    && Boolean(menu.querySelector("[data-context-action=duplicate]"))
+    && Boolean(menu.querySelector("[data-context-action=delete]"));
+})()`);
+await evaluate('document.querySelector("#mathboard-context-menu [data-context-action=duplicate]").click()');
+await check("duplicates from the object context menu", `document.querySelector("#mathboard-status").textContent.includes("Object duplicated")
+  && document.querySelector("#mathboard-history-output").value.startsWith("8 of 8")`);
+await rightClick(eraseTest.start);
+await check("opens board actions on empty-space right click", `(() => {
+  const menu = document.querySelector("#mathboard-context-menu");
+  return !menu.hidden
+    && menu.getAttribute("aria-label") === "Board actions"
+    && Boolean(menu.querySelector("[data-context-action=paste]"))
+    && Boolean(menu.querySelector("[data-context-action=history]"))
+    && Boolean(menu.querySelector("[data-context-action=reset-view]"))
+    && Boolean(menu.querySelector("[data-context-action=fullscreen]"))
+    && Boolean(menu.querySelector("[data-context-action=clear]"));
+})()`);
+await pressKey("Escape", "Escape");
+await check("closes the context menu with Escape", 'document.querySelector("#mathboard-context-menu").hidden');
+
+await pressKey("h");
+await check("opens stroke history with H", 'document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');
 await evaluate('document.querySelector("#mathboard-history-start").click()');
 await check("undoes strokes", '!document.querySelector("#mathboard-redo").disabled');
 await evaluate('document.querySelector("#mathboard-history-end").click()');
 await check("redoes strokes", 'document.querySelector("#mathboard-board").classList.contains("has-ink")');
-await evaluate('document.querySelector("#mathboard-history-close").click()');
-await check("closes stroke history", '!document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');
+await pressKey("h");
+await check("closes stroke history with H", '!document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');
 
-await evaluate('document.querySelector("#mathboard-fullscreen").click()');
+await pressKey("f");
 await waitFor('document.querySelector(".mathboard-main").classList.contains("is-fullscreen") || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
-await check("enters fullscreen mode", 'document.querySelector(".mathboard-main").classList.contains("is-fullscreen") || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
-await evaluate('document.querySelector("#mathboard-fullscreen").click()');
+await check("enters fullscreen mode with F", 'document.querySelector(".mathboard-main").classList.contains("is-fullscreen") || document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
+await pressKey("f");
 await waitFor('document.fullscreenElement === null && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen") && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
-await check("exits fullscreen mode", '!document.querySelector(".mathboard-main").classList.contains("is-fullscreen")');
+await check("exits fullscreen mode with F", '!document.querySelector(".mathboard-main").classList.contains("is-fullscreen")');
 
 await command("Browser.setDownloadBehavior", { behavior: "deny", eventsEnabled: true });
 await evaluate(`(() => {

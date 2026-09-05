@@ -21,6 +21,13 @@ export function isTransformEntry(entry) {
     && Array.isArray(entry.afterPoints);
 }
 
+export function isVisibilityEntry(entry) {
+  return entry?.tool === "visibility"
+    && Number.isInteger(entry.targetIndex)
+    && typeof entry.beforeHidden === "boolean"
+    && typeof entry.afterHidden === "boolean";
+}
+
 export function clonePoints(points) {
   return points.map((point) => ({ ...point }));
 }
@@ -34,8 +41,10 @@ export function applyTransformEntry(strokes, entry, pointsKey) {
   if (Number.isFinite(entry[widthScaleKey])) target.widthScale = entry[widthScaleKey];
   if (Array.isArray(entry.maskTransforms)) {
     entry.maskTransforms.forEach((maskTransform) => {
-      const eraser = strokes[maskTransform.eraserIndex];
-      const maskTarget = eraser?.targets?.find((item) => item.targetIndex === entry.targetIndex);
+      const eraser = Number.isInteger(maskTransform.eraserIndex) ? strokes[maskTransform.eraserIndex] : null;
+      const maskTarget = Number.isInteger(maskTransform.inlineMaskIndex)
+        ? target.inlineErasers?.[maskTransform.inlineMaskIndex]
+        : eraser?.targets?.find((item) => item.targetIndex === entry.targetIndex);
       if (maskTarget && Array.isArray(maskTransform[pointsKey])) {
         maskTarget.points = clonePoints(maskTransform[pointsKey]);
         const renderWidthKey = pointsKey === "beforePoints" ? "beforeRenderWidth" : "afterRenderWidth";
@@ -48,8 +57,16 @@ export function applyTransformEntry(strokes, entry, pointsKey) {
   return true;
 }
 
+export function applyVisibilityEntry(strokes, entry, hiddenKey) {
+  if (!isVisibilityEntry(entry) || !["beforeHidden", "afterHidden"].includes(hiddenKey)) return false;
+  const target = strokes[entry.targetIndex];
+  if (!target?.points) return false;
+  target.hidden = entry[hiddenKey];
+  return true;
+}
+
 export function strokeBounds(stroke, width, height) {
-  if (!stroke?.points?.length || isTransformEntry(stroke) || stroke.tool === "eraser") return null;
+  if (!stroke?.points?.length || stroke.hidden || isTransformEntry(stroke) || stroke.tool === "eraser") return null;
   if (stroke.tool === "circle" && stroke.points.length > 1) {
     const start = pixelPoint(stroke.points[0], width, height);
     const end = pixelPoint(stroke.points[1], width, height);
@@ -107,7 +124,7 @@ export function pointInSelection(stroke, point, width, height, zoom) {
 }
 
 export function hitTestStroke(stroke, point, width, height, zoom) {
-  if (!stroke?.points?.length || stroke.tool === "eraser" || isTransformEntry(stroke)) return false;
+  if (!stroke?.points?.length || stroke.hidden || stroke.tool === "eraser" || isTransformEntry(stroke)) return false;
   const threshold = (strokeWidth(stroke) / 2) + (7 / zoom);
   if (stroke.tool === "circle" && stroke.points.length > 1) {
     const start = pixelPoint(stroke.points[0], width, height);

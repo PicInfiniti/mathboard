@@ -35,6 +35,17 @@ export function sanitizeImportedStroke(stroke, budget) {
   };
   const widthScale = Number(stroke.widthScale);
   if (Number.isFinite(widthScale)) sanitized.widthScale = Math.min(400, Math.max(.001, widthScale));
+  const renderWidth = Number(stroke.renderWidth);
+  if (Number.isFinite(renderWidth)) sanitized.renderWidth = Math.min(1800, Math.max(.1, renderWidth));
+  if (stroke.hidden === true) sanitized.hidden = true;
+  if (Array.isArray(stroke.inlineErasers)) {
+    sanitized.inlineErasers = stroke.inlineErasers.slice(0, 5000).map((eraser) => sanitizeImportedStroke({
+      ...eraser,
+      tool: "eraser",
+      inlineErasers: undefined,
+      targets: undefined,
+    }, budget)).filter(Boolean);
+  }
   if (stroke.tool === "eraser" && Array.isArray(stroke.targets)) {
     sanitized.targets = stroke.targets.slice(0, 50000).map((target) => {
       const targetIndex = Number(target?.targetIndex);

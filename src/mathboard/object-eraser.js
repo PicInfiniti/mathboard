@@ -66,7 +66,7 @@ function boundsOverlap(first, second) {
 }
 
 export function strokeIntersectsEraser(stroke, eraser, width, height) {
-  if (!stroke?.points?.length || !eraser?.points?.length || stroke.tool === "eraser" || stroke.tool === "transform") return false;
+  if (!stroke?.points?.length || stroke.hidden || !eraser?.points?.length || stroke.tool === "eraser" || stroke.tool === "transform") return false;
   const strokePathPoints = strokePath(stroke, width, height);
   const eraserPathPoints = strokePath(eraser, width, height);
   const threshold = (strokeWidth(stroke) + strokeWidth(eraser)) / 2;
@@ -109,6 +109,20 @@ export function associateLegacyErasers(strokes, width, height) {
 
 export function eraserMasksForStroke(strokes, targetIndex) {
   const masks = [];
+  const stroke = strokes[targetIndex];
+  if (Array.isArray(stroke?.inlineErasers)) {
+    stroke.inlineErasers.forEach((eraser, inlineMaskIndex) => {
+      if (!eraser?.points?.length) return;
+      masks.push({
+        eraser,
+        eraserIndex: null,
+        inlineMaskIndex,
+        target: eraser,
+        points: eraser.points,
+        renderWidth: Number.isFinite(eraser.renderWidth) ? eraser.renderWidth : strokeWidth(eraser),
+      });
+    });
+  }
   strokes.forEach((eraser, eraserIndex) => {
     if (eraser?.tool !== "eraser" || !Array.isArray(eraser.targets)) return;
     const target = eraser.targets.find((item) => item.targetIndex === targetIndex);
@@ -141,9 +155,15 @@ export function renderStrokeObjects(targetContext, strokes, width, height, layer
   });
 
   strokes.forEach((stroke, index) => {
-    if (stroke?.tool === "transform") return;
+    if (stroke?.hidden || stroke?.tool === "transform" || stroke?.tool === "visibility") return;
     if (stroke?.tool === "eraser" && Array.isArray(stroke.targets)) return;
-    const masks = masksByTarget.get(index);
+    const inlineMasks = Array.isArray(stroke?.inlineErasers)
+      ? stroke.inlineErasers.map((eraser) => ({
+        ...eraser,
+        renderWidth: Number.isFinite(eraser.renderWidth) ? eraser.renderWidth : strokeWidth(eraser),
+      }))
+      : [];
+    const masks = [...(masksByTarget.get(index) || []), ...inlineMasks];
     if (!masks?.length || !layerCanvas || typeof targetContext.getTransform !== "function") {
       renderStroke(targetContext, stroke, width, height);
       return;

@@ -12,6 +12,7 @@ import {
 import { recognizeAssistedShape } from "../src/mathboard/shape-assist.js";
 import {
   applyTransformEntry,
+  applyVisibilityEntry,
   findStrokeAt,
   oppositeAnchor,
   scaledPoints,
@@ -264,6 +265,54 @@ test("migrates canvas-wide eraser strokes to object masks", () => {
   const strokes = [stroke, eraser];
   associateLegacyErasers(strokes, 100, 100);
   assert.deepEqual(eraser.targets, [{ targetIndex: 0 }]);
+});
+
+test("applies reversible object visibility history", () => {
+  const stroke = { tool: "pen", size: 3, points: [{ x: .2, y: .2 }, { x: .4, y: .4 }] };
+  const entry = { tool: "visibility", targetIndex: 0, beforeHidden: false, afterHidden: true };
+  const strokes = [stroke];
+
+  assert.equal(applyVisibilityEntry(strokes, entry, "afterHidden"), true);
+  assert.equal(stroke.hidden, true);
+  assert.equal(findStrokeAt(strokes, { x: 30, y: 30 }, 100, 100, 1), null);
+  assert.equal(applyVisibilityEntry(strokes, entry, "beforeHidden"), true);
+  assert.equal(stroke.hidden, false);
+});
+
+test("keeps inline eraser masks transformable for pasted objects", () => {
+  const pasted = {
+    tool: "pen",
+    size: 4,
+    points: [{ x: .1, y: .5 }, { x: .9, y: .5 }],
+    inlineErasers: [{
+      tool: "eraser",
+      size: 6,
+      renderWidth: 18,
+      points: [{ x: .5, y: .4 }, { x: .5, y: .6 }],
+    }],
+  };
+  const masks = eraserMasksForStroke([pasted], 0);
+  assert.equal(masks.length, 1);
+  assert.equal(masks[0].inlineMaskIndex, 0);
+
+  const movedMask = translatedPoints(masks[0].points, 10, 5, 100, 100);
+  const entry = {
+    tool: "transform",
+    targetIndex: 0,
+    beforePoints: pasted.points,
+    afterPoints: translatedPoints(pasted.points, 10, 5, 100, 100),
+    maskTransforms: [{
+      eraserIndex: null,
+      inlineMaskIndex: 0,
+      beforePoints: masks[0].points,
+      afterPoints: movedMask,
+      beforeRenderWidth: 18,
+      afterRenderWidth: 12,
+    }],
+  };
+  assert.equal(applyTransformEntry([pasted], entry, "afterPoints"), true);
+  assert.deepEqual(pasted.inlineErasers[0].points, movedMask);
+  assert.equal(pasted.inlineErasers[0].renderWidth, 12);
 });
 
 test("formats coordinate labels at readable intervals", () => {

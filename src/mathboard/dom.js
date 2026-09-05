@@ -13,6 +13,7 @@ export function getMathBoardElements(root = document) {
     canvasTabs: query("#mathboard-canvas-tabs"),
     clearButton: query("#mathboard-clear"),
     colorButtons: queryAll("[data-color]"),
+    contextMenu: query("#mathboard-context-menu"),
     deleteCanvasButton: query("#mathboard-canvas-delete"),
     duplicateCanvasButton: query("#mathboard-canvas-duplicate"),
     eraserPreview: query("#mathboard-eraser-preview"),

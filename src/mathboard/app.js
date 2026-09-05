@@ -20,6 +20,7 @@ import { createProjectStorage } from "./storage.js";
 import { recognizeAssistedShape } from "./shape-assist.js";
 import {
   applyTransformEntry,
+  applyVisibilityEntry,
   clonePoints,
   findStrokeAt,
   isTransformEntry,
@@ -58,6 +59,7 @@ const {
   canvas,
   toolButtons,
   colorButtons,
+  contextMenu,
   gridButtons,
   panelTabButtons,
   panelSections,
@@ -121,6 +123,8 @@ let activePan = null;
 let activeZoomSelection = null;
 let activeSelectionTransform = null;
 let selectedStrokeIndex = null;
+let objectClipboard = null;
+let pasteCount = 0;
 let lastPenInteraction = 0;
 let clearTimer = null;
 let deleteCanvasTimer = null;
@@ -609,7 +613,7 @@ function syncControls() {
   board.classList.toggle("is-grid-coordinate", state.grid === "coordinate");
   board.classList.toggle("is-zoomed-precision", state.zoom >= 1.5);
   syncAxisLabels();
-  board.classList.toggle("has-ink", state.strokes.length > 0);
+  board.classList.toggle("has-ink", state.strokes.some((stroke) => stroke?.points?.length && !stroke.hidden && stroke.tool !== "eraser"));
   zoomOutButton.disabled = state.zoom <= MIN_ZOOM;
   zoomInButton.disabled = state.zoom >= MAX_ZOOM;
   zoomResetButton.setAttribute("aria-label", `Reset zoom and center canvas. Current zoom ${Math.round(state.zoom * 100)}%.`);
@@ -858,7 +862,7 @@ function selectionPoint(event) {
 function selectedStroke() {
   if (selectedStrokeIndex === null) return null;
   const stroke = state.strokes[selectedStrokeIndex];
-  if (!stroke || isTransformEntry(stroke) || stroke.tool === "eraser") {
+  if (!stroke?.points?.length || stroke.hidden || isTransformEntry(stroke) || stroke.tool === "eraser") {
     selectedStrokeIndex = null;
     return null;
   }
@@ -871,6 +875,185 @@ function clearSelection() {
   canvas.removeAttribute("data-selection-cursor");
 }
 
+function copySelectedObject(shouldAnnounce = true) {
+  const stroke = selectedStroke();
+  if (!stroke) {
+    if (shouldAnnounce) announce("Select an object to copy.");
+    return false;
+  }
+  const copiedStroke = JSON.parse(JSON.stringify(stroke));
+  delete copiedStroke.hidden;
+  delete copiedStroke.inlineErasers;
+  copiedStroke.inlineErasers = eraserMasksForStroke(state.strokes, selectedStrokeIndex).map((mask) => {
+    const copiedMask = JSON.parse(JSON.stringify(mask.eraser));
+    delete copiedMask.targets;
+    copiedMask.points = clonePoints(mask.points);
+    copiedMask.renderWidth = mask.renderWidth;
+    return copiedMask;
+  });
+  objectClipboard = copiedStroke;
+  pasteCount = 0;
+  if (shouldAnnounce) announce("Object copied · press P to paste.");
+  return true;
+}
+
+function deleteSelectedObject(message = "Object deleted.") {
+  const stroke = selectedStroke();
+  if (!stroke) {
+    announce("Select an object to delete.");
+    return false;
+  }
+  const targetIndex = selectedStrokeIndex;
+  stroke.hidden = true;
+  state.strokes.push({
+    tool: "visibility",
+    targetIndex,
+    beforeHidden: false,
+    afterHidden: true,
+  });
+  redoStack = [];
+  clearSelection();
+  saveState();
+  renderBoard();
+  announce(message);
+  return true;
+}
+
+function cutSelectedObject() {
+  if (!copySelectedObject(false)) {
+    announce("Select an object to cut.");
+    return false;
+  }
+  return deleteSelectedObject("Object cut · press P to paste.");
+}
+
+function pasteObject(message = "Object pasted.") {
+  if (!objectClipboard) {
+    announce("Copy or cut an object before pasting.");
+    return false;
+  }
+  const bounds = canvas.getBoundingClientRect();
+  pasteCount += 1;
+  const offset = 18 * pasteCount;
+  const pastedStroke = JSON.parse(JSON.stringify(objectClipboard));
+  pastedStroke.points = translatedPoints(pastedStroke.points, offset, offset, bounds.width, bounds.height);
+  pastedStroke.inlineErasers = (pastedStroke.inlineErasers || []).map((eraser) => ({
+    ...eraser,
+    points: translatedPoints(eraser.points, offset, offset, bounds.width, bounds.height),
+  }));
+  delete pastedStroke.hidden;
+  state.strokes.push(pastedStroke);
+  selectedStrokeIndex = state.strokes.length - 1;
+  state.tool = "select";
+  redoStack = [];
+  saveState();
+  renderBoard();
+  announce(message);
+  return true;
+}
+
+function duplicateSelectedObject() {
+  if (!copySelectedObject(false)) {
+    announce("Select an object to duplicate.");
+    return false;
+  }
+  return pasteObject("Object duplicated.");
+}
+
+function closeContextMenu({ restoreFocus = false } = {}) {
+  if (contextMenu.hidden) return;
+  contextMenu.hidden = true;
+  contextMenu.replaceChildren();
+  if (restoreFocus) canvas.focus({ preventScroll: true });
+}
+
+function contextMenuButton({ action, icon, label, shortcut = "", disabled = false, danger = false }) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.role = "menuitem";
+  button.dataset.contextAction = action;
+  if (danger) button.dataset.danger = "true";
+  button.disabled = disabled;
+  const iconElement = document.createElement("span");
+  iconElement.setAttribute("aria-hidden", "true");
+  iconElement.textContent = icon;
+  const labelElement = document.createElement("span");
+  labelElement.textContent = label;
+  const shortcutElement = document.createElement("kbd");
+  shortcutElement.textContent = shortcut;
+  button.append(iconElement, labelElement, shortcutElement);
+  return button;
+}
+
+function contextMenuDivider() {
+  const divider = document.createElement("hr");
+  divider.role = "separator";
+  return divider;
+}
+
+function openContextMenu(event) {
+  event.preventDefault();
+  const bounds = canvas.getBoundingClientRect();
+  const point = selectionPoint(event);
+  const current = selectedStroke();
+  const hitIndex = findStrokeAt(state.strokes, point, bounds.width, bounds.height, state.zoom)
+    ?? (current && pointInSelection(current, point, bounds.width, bounds.height, state.zoom) ? selectedStrokeIndex : null);
+  const hasObject = hitIndex !== null;
+  if (hasObject) {
+    selectedStrokeIndex = hitIndex;
+    state.tool = "select";
+  } else {
+    clearSelection();
+  }
+  renderBoard();
+
+  const items = hasObject
+    ? [
+      { action: "cut", icon: "✂", label: "Cut", shortcut: "X" },
+      { action: "copy", icon: "⧉", label: "Copy", shortcut: "Y" },
+      { action: "duplicate", icon: "+", label: "Duplicate", shortcut: "D" },
+      "divider",
+      { action: "delete", icon: "×", label: "Delete", shortcut: "Del", danger: true },
+    ]
+    : [
+      { action: "paste", icon: "▣", label: "Paste", shortcut: "P", disabled: !objectClipboard },
+      "divider",
+      { action: "undo", icon: "↶", label: "Undo", shortcut: "U", disabled: state.strokes.length === 0 },
+      { action: "redo", icon: "↷", label: "Redo", shortcut: "R", disabled: redoStack.length === 0 },
+      { action: "history", icon: "◴", label: "History", shortcut: "H", disabled: state.strokes.length + redoStack.length === 0 },
+      "divider",
+      { action: "reset-view", icon: "↺", label: "Reset view" },
+      { action: "fullscreen", icon: "⛶", label: isFullscreenMode() ? "Exit full screen" : "Full screen", shortcut: "F" },
+      { action: "clear", icon: "⌫", label: "Clear board", danger: true, disabled: !state.strokes.length },
+    ];
+  contextMenu.replaceChildren(...items.map((item) => (
+    item === "divider" ? contextMenuDivider() : contextMenuButton(item)
+  )));
+  contextMenu.setAttribute("aria-label", hasObject ? "Selected object actions" : "Board actions");
+  contextMenu.hidden = false;
+  const boardBounds = board.getBoundingClientRect();
+  const left = Math.max(8, Math.min(event.clientX - boardBounds.left, boardBounds.width - contextMenu.offsetWidth - 8));
+  const top = Math.max(8, Math.min(event.clientY - boardBounds.top, boardBounds.height - contextMenu.offsetHeight - 8));
+  contextMenu.style.left = `${left}px`;
+  contextMenu.style.top = `${top}px`;
+  contextMenu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+}
+
+function runContextAction(action) {
+  closeContextMenu();
+  if (action === "cut") cutSelectedObject();
+  else if (action === "copy") copySelectedObject();
+  else if (action === "duplicate") duplicateSelectedObject();
+  else if (action === "delete") deleteSelectedObject();
+  else if (action === "paste") pasteObject();
+  else if (action === "undo") undo();
+  else if (action === "redo") redo();
+  else if (action === "history") toggleHistoryScrubber();
+  else if (action === "reset-view") resetView();
+  else if (action === "fullscreen") toggleFullscreenMode();
+  else if (action === "clear") requestClearBoard();
+}
+
 function beginSelectionTransform(event, strokeIndex, type, handle = null) {
   const bounds = canvas.getBoundingClientRect();
   const stroke = state.strokes[strokeIndex];
@@ -880,6 +1063,7 @@ function beginSelectionTransform(event, strokeIndex, type, handle = null) {
   const anchor = handle ? oppositeAnchor(geometry.bounds, handle) : null;
   const maskTransforms = eraserMasksForStroke(state.strokes, strokeIndex).map((mask) => ({
     eraserIndex: mask.eraserIndex,
+    inlineMaskIndex: mask.inlineMaskIndex,
     target: mask.target,
     beforePoints: clonePoints(mask.points),
     beforeRenderWidth: mask.renderWidth,
@@ -996,6 +1180,7 @@ function finishSelection(event) {
       afterWidthScale: stroke.widthScale,
       maskTransforms: interaction.maskTransforms.map((mask) => ({
         eraserIndex: mask.eraserIndex,
+        inlineMaskIndex: mask.inlineMaskIndex,
         beforePoints: clonePoints(mask.beforePoints),
         afterPoints: clonePoints(mask.target.points),
         beforeRenderWidth: mask.beforeRenderWidth,
@@ -1185,11 +1370,13 @@ function setHistoryPosition(requestedPosition, shouldAnnounce = true) {
   while (state.strokes.length > target) {
     const entry = state.strokes.pop();
     applyTransformEntry(state.strokes, entry, "beforePoints");
+    applyVisibilityEntry(state.strokes, entry, "beforeHidden");
     redoStack.push(entry);
   }
   while (state.strokes.length < target && redoStack.length) {
     const entry = redoStack.pop();
     applyTransformEntry(state.strokes, entry, "afterPoints");
+    applyVisibilityEntry(state.strokes, entry, "afterHidden");
     state.strokes.push(entry);
   }
   saveState();
@@ -1735,7 +1922,34 @@ canvas.addEventListener("pointercancel", finishStroke);
 canvas.addEventListener("lostpointercapture", (event) => {
   if ((activeStroke || activePan || activeZoomSelection || activeSelectionTransform) && event.pointerId === activePointerId) finishStroke(event);
 });
-canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+canvas.addEventListener("contextmenu", openContextMenu);
+contextMenu.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-context-action]");
+  if (button && !button.disabled) runContextAction(button.dataset.contextAction);
+});
+contextMenu.addEventListener("keydown", (event) => {
+  const buttons = [...contextMenu.querySelectorAll("button:not(:disabled)")];
+  const currentIndex = buttons.indexOf(document.activeElement);
+  const nextIndex = event.key === "ArrowDown"
+    ? (currentIndex + 1) % buttons.length
+    : event.key === "ArrowUp"
+      ? (currentIndex - 1 + buttons.length) % buttons.length
+      : event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? buttons.length - 1
+          : null;
+  if (nextIndex !== null && buttons[nextIndex]) {
+    event.preventDefault();
+    buttons[nextIndex].focus({ preventScroll: true });
+  }
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu();
+}, true);
+window.addEventListener("blur", closeContextMenu);
+window.addEventListener("resize", closeContextMenu);
+window.addEventListener("scroll", closeContextMenu, true);
 canvas.addEventListener("keydown", (event) => {
   if (event.key === "Home") {
     event.preventDefault();
@@ -1758,10 +1972,22 @@ canvas.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !contextMenu.hidden) {
+    event.preventDefault();
+    closeContextMenu({ restoreFocus: true });
+    return;
+  }
   if (event.key === "Escape" && activeSelectionTransform) {
     const pointerId = activePointerId;
     const target = state.strokes[activeSelectionTransform.targetIndex];
-    if (target) target.points = clonePoints(activeSelectionTransform.beforePoints);
+    if (target) {
+      target.points = clonePoints(activeSelectionTransform.beforePoints);
+      target.widthScale = activeSelectionTransform.beforeWidthScale;
+      activeSelectionTransform.maskTransforms.forEach((mask) => {
+        mask.target.points = clonePoints(mask.beforePoints);
+        mask.target.renderWidth = mask.beforeRenderWidth;
+      });
+    }
     clearSelection();
     activePointerId = null;
     activePointerType = null;
@@ -1797,6 +2023,29 @@ document.addEventListener("keydown", (event) => {
     return;
   }
   const modifier = event.ctrlKey || event.metaKey;
+  const target = event.target;
+  const isTyping = target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || target?.isContentEditable;
+  const shortcut = event.key.toLowerCase();
+  const singleKeyAction = ["d", "x", "y", "p", "u", "r", "h", "f"].includes(shortcut)
+    || event.key === "Delete"
+    || event.key === "Backspace";
+  if (!modifier && !event.altKey && !event.repeat && !isTyping && !renameCanvasDialog.open && singleKeyAction) {
+    event.preventDefault();
+    closeContextMenu();
+    if (shortcut === "d") duplicateSelectedObject();
+    else if (shortcut === "x") cutSelectedObject();
+    else if (shortcut === "y") copySelectedObject();
+    else if (shortcut === "p") pasteObject();
+    else if (shortcut === "u") undo();
+    else if (shortcut === "r") redo();
+    else if (shortcut === "h") toggleHistoryScrubber();
+    else if (shortcut === "f") toggleFullscreenMode();
+    else deleteSelectedObject();
+    return;
+  }
   if (!modifier || event.key.toLowerCase() !== "z") return;
   event.preventDefault();
   if (event.shiftKey) redo();

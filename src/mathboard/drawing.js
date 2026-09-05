@@ -1,13 +1,16 @@
 export function strokeWidth(stroke) {
-  if (stroke.tool === "eraser") return Math.max(18, stroke.size * 3);
-  if (stroke.tool === "highlighter") return stroke.size * 3;
-  return stroke.size;
+  if (Number.isFinite(stroke.renderWidth)) return Math.max(.1, stroke.renderWidth);
+  const widthScale = Number.isFinite(stroke.widthScale) ? Math.max(.001, stroke.widthScale) : 1;
+  if (stroke.tool === "eraser") return Math.max(18, stroke.size * 3) * widthScale;
+  if (stroke.tool === "highlighter") return stroke.size * 3 * widthScale;
+  return stroke.size * widthScale;
 }
 
 function pressureAdjustedWidth(stroke, point) {
   if (stroke.tool !== "pen" || stroke.pointerType !== "pen") return strokeWidth(stroke);
   const pressure = Number.isFinite(point?.pressure) ? point.pressure : 0.5;
-  return stroke.size * (0.35 + (pressure * 1.3));
+  const widthScale = Number.isFinite(stroke.widthScale) ? Math.max(.001, stroke.widthScale) : 1;
+  return stroke.size * widthScale * (0.35 + (pressure * 1.3));
 }
 
 function midpoint(first, second) {

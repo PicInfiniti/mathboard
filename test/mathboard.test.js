@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { coordinateLabelInterval, formatCoordinate } from "../src/mathboard/coordinates.js";
-import { renderStroke, shapeLength } from "../src/mathboard/drawing.js";
+import { renderStroke, shapeLength, strokeWidth } from "../src/mathboard/drawing.js";
+import {
+  associateEraser,
+  associateLegacyErasers,
+  eraserMasksForStroke,
+  strokeIntersectsEraser,
+} from "../src/mathboard/object-eraser.js";
 import { recognizeAssistedShape } from "../src/mathboard/shape-assist.js";
 import {
   applyTransformEntry,
@@ -192,6 +198,72 @@ test("selects, moves, and proportionally resizes stroke objects", () => {
   assert.deepEqual(strokes[0].points, line.points);
   assert.equal(applyTransformEntry(strokes, historyEntry, "afterPoints"), true);
   assert.deepEqual(strokes[0].points, resized);
+});
+
+test("associates erasures with affected objects so their masks can move with them", () => {
+  const first = {
+    tool: "pen",
+    color: "#000",
+    size: 4,
+    points: [{ x: .1, y: .2 }, { x: .8, y: .2 }],
+  };
+  const second = {
+    tool: "pen",
+    color: "#000",
+    size: 4,
+    points: [{ x: .1, y: .7 }, { x: .8, y: .7 }],
+  };
+  const eraser = {
+    tool: "eraser",
+    color: "#000",
+    size: 6,
+    points: [{ x: .4, y: .1 }, { x: .4, y: .3 }],
+  };
+
+  assert.equal(strokeIntersectsEraser(first, eraser, 100, 100), true);
+  assert.equal(strokeIntersectsEraser(second, eraser, 100, 100), false);
+  assert.deepEqual(associateEraser([first, second], eraser, 100, 100), [{ targetIndex: 0 }]);
+
+  const strokes = [first, eraser, second];
+  const masks = eraserMasksForStroke(strokes, 0);
+  assert.equal(masks.length, 1);
+  masks[0].target.points = translatedPoints(masks[0].points, 10, 5, 100, 100);
+
+  const moved = translatedPoints(first.points, 10, 5, 100, 100);
+  const transform = {
+    tool: "transform",
+    targetIndex: 0,
+    beforePoints: first.points,
+    afterPoints: moved,
+    beforeWidthScale: 1,
+    afterWidthScale: 2,
+    maskTransforms: [{
+      eraserIndex: 1,
+      beforePoints: eraser.points,
+      afterPoints: masks[0].target.points,
+      beforeRenderWidth: 18,
+      afterRenderWidth: 36,
+    }],
+  };
+  assert.equal(applyTransformEntry(strokes, transform, "afterPoints"), true);
+  assert.deepEqual(strokes[0].points, moved);
+  assert.equal(strokes[0].widthScale, 2);
+  assert.equal(strokeWidth(strokes[0]), 8);
+  assert.deepEqual(strokes[1].targets[0].points, transform.maskTransforms[0].afterPoints);
+  assert.equal(strokes[1].targets[0].renderWidth, 36);
+  assert.equal(strokeWidth({ ...eraser, renderWidth: strokes[1].targets[0].renderWidth }), 36);
+  assert.equal(applyTransformEntry(strokes, transform, "beforePoints"), true);
+  assert.equal(strokes[0].widthScale, 1);
+  assert.deepEqual(strokes[1].targets[0].points, eraser.points);
+  assert.equal(strokes[1].targets[0].renderWidth, 18);
+});
+
+test("migrates canvas-wide eraser strokes to object masks", () => {
+  const stroke = { tool: "line", size: 2, points: [{ x: .1, y: .5 }, { x: .9, y: .5 }] };
+  const eraser = { tool: "eraser", size: 5, points: [{ x: .5, y: .4 }, { x: .5, y: .6 }] };
+  const strokes = [stroke, eraser];
+  associateLegacyErasers(strokes, 100, 100);
+  assert.deepEqual(eraser.targets, [{ targetIndex: 0 }]);
 });
 
 test("formats coordinate labels at readable intervals", () => {

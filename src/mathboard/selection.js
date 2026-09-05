@@ -30,6 +30,21 @@ export function applyTransformEntry(strokes, entry, pointsKey) {
   const target = strokes[entry.targetIndex];
   if (!target?.points) return false;
   target.points = clonePoints(entry[pointsKey]);
+  const widthScaleKey = pointsKey === "beforePoints" ? "beforeWidthScale" : "afterWidthScale";
+  if (Number.isFinite(entry[widthScaleKey])) target.widthScale = entry[widthScaleKey];
+  if (Array.isArray(entry.maskTransforms)) {
+    entry.maskTransforms.forEach((maskTransform) => {
+      const eraser = strokes[maskTransform.eraserIndex];
+      const maskTarget = eraser?.targets?.find((item) => item.targetIndex === entry.targetIndex);
+      if (maskTarget && Array.isArray(maskTransform[pointsKey])) {
+        maskTarget.points = clonePoints(maskTransform[pointsKey]);
+        const renderWidthKey = pointsKey === "beforePoints" ? "beforeRenderWidth" : "afterRenderWidth";
+        if (Number.isFinite(maskTransform[renderWidthKey])) {
+          maskTarget.renderWidth = maskTransform[renderWidthKey];
+        }
+      }
+    });
+  }
   return true;
 }
 

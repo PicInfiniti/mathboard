@@ -1,5 +1,5 @@
 import { coordinateLabelInterval, formatCoordinate } from "./coordinates.js";
-import { renderStroke } from "./drawing.js";
+import { associateLegacyErasers, renderStrokeObjects } from "./object-eraser.js";
 
 function drawExportBackground(targetContext, width, height, state) {
   targetContext.fillStyle = "#fffdf8";
@@ -85,6 +85,7 @@ export function createCanvasExport(canvas, state) {
   const scale = 2;
   const exportCanvas = document.createElement("canvas");
   const inkCanvas = document.createElement("canvas");
+  const objectMaskCanvas = document.createElement("canvas");
   exportCanvas.width = Math.round(bounds.width * scale);
   exportCanvas.height = Math.round(bounds.height * scale);
   inkCanvas.width = exportCanvas.width;
@@ -97,7 +98,8 @@ export function createCanvasExport(canvas, state) {
   inkContext.translate((bounds.width / 2) + state.panX, (bounds.height / 2) + state.panY);
   inkContext.scale(state.zoom, state.zoom);
   inkContext.translate(-(bounds.width / 2), -(bounds.height / 2));
-  state.strokes.forEach((stroke) => renderStroke(inkContext, stroke, bounds.width, bounds.height));
+  associateLegacyErasers(state.strokes, bounds.width, bounds.height);
+  renderStrokeObjects(inkContext, state.strokes, bounds.width, bounds.height, objectMaskCanvas);
   exportContext.drawImage(inkCanvas, 0, 0, bounds.width, bounds.height);
   return exportCanvas;
 }

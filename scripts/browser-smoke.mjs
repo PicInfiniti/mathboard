@@ -219,6 +219,7 @@ await evaluate(`(() => {
   window.__mathboardSelectionBoxes = 0;
   CanvasRenderingContext2D.prototype.strokeRect = function (...args) {
     window.__mathboardSelectionBoxes += 1;
+    window.__mathboardLastSelectionBox = args;
     return originalStrokeRect.apply(this, args);
   };
   document.querySelector("[data-tool=select]").click();
@@ -258,6 +259,111 @@ const drawingDebug = await evaluate(`(() => ({
 }))()`);
 if (drawingDebug.undoDisabled) process.stdout.write(`Drawing debug: ${JSON.stringify({ drawingDebug, runtimeErrors })}\n`);
 await check("records pointer strokes", '!document.querySelector("#mathboard-undo").disabled && document.querySelector("#mathboard-board").classList.contains("has-ink")');
+
+await evaluate('document.querySelector("#mathboard-clear").click(); document.querySelector("#mathboard-clear").click(); document.querySelector("[data-tool=pen]").click()');
+const eraseCanvasArea = await evaluate(`(() => {
+  const canvas = document.querySelector("#mathboard-canvas");
+  const bounds = document.querySelector("#mathboard-canvas").getBoundingClientRect();
+  const visibleLeft = Math.max(0, bounds.left);
+  const visibleTop = Math.max(0, bounds.top);
+  const visibleRight = Math.min(window.innerWidth, bounds.right);
+  const visibleBottom = Math.min(window.innerHeight, bounds.bottom);
+  let best = null;
+  for (let y = visibleTop + 40; y < visibleBottom - 120; y += 20) {
+    let runStart = null;
+    for (let x = visibleLeft; x <= visibleRight; x += 4) {
+      if (document.elementFromPoint(x, y) === canvas && document.elementFromPoint(x, y + 80) === canvas) {
+        if (runStart === null) runStart = x;
+      } else if (runStart !== null) {
+        if (!best || x - runStart > best.right - best.left) best = { left: runStart, right: x - 4, y };
+        runStart = null;
+      }
+    }
+    if (runStart !== null && (!best || visibleRight - runStart > best.right - best.left)) {
+      best = { left: runStart, right: visibleRight, y };
+    }
+  }
+  if (!best || best.right - best.left < 260) throw new Error("No clear canvas area for eraser resize test");
+  const available = best.right - best.left;
+  return {
+    start: { x: best.left + 20, y: best.y },
+    lineLength: Math.min(140, available * .4),
+    moveX: Math.min(100, available * .3),
+  };
+})()`);
+const eraseTest = {
+  start: eraseCanvasArea.start,
+  middle: { x: eraseCanvasArea.start.x + (eraseCanvasArea.lineLength / 2), y: eraseCanvasArea.start.y },
+  end: { x: eraseCanvasArea.start.x + eraseCanvasArea.lineLength, y: eraseCanvasArea.start.y },
+};
+await drawPointer([eraseTest.start, eraseTest.middle, eraseTest.end]);
+await evaluate('document.querySelector("[data-tool=eraser]").click()');
+await drawPointer([
+  { x: eraseTest.middle.x, y: eraseTest.middle.y - 30 },
+  { x: eraseTest.middle.x, y: eraseTest.middle.y + 30 },
+]);
+await evaluate('document.querySelector("[data-tool=select]").click()');
+await dragPointer(eraseTest.start, { x: eraseTest.start.x + eraseCanvasArea.moveX, y: eraseTest.start.y + 80 });
+await check("keeps erased gaps attached when moving objects", `(() => {
+  const canvas = document.querySelector("#mathboard-canvas");
+  const bounds = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const hasInkNear = (clientX, clientY, radius = 4) => {
+    const centerX = Math.round((clientX - bounds.left) * scaleX);
+    const centerY = Math.round((clientY - bounds.top) * scaleY);
+    const pixels = canvas.getContext("2d").getImageData(centerX - radius, centerY - radius, radius * 2 + 1, radius * 2 + 1).data;
+    for (let index = 3; index < pixels.length; index += 4) if (pixels[index] > 20) return true;
+    return false;
+  };
+  const deltaX = ${eraseCanvasArea.moveX};
+  const deltaY = 80;
+  return hasInkNear(${eraseTest.start.x} + deltaX + 20, ${eraseTest.start.y} + deltaY)
+    && !hasInkNear(${eraseTest.middle.x} + deltaX, ${eraseTest.middle.y} + deltaY, 6)
+    && hasInkNear(${eraseTest.end.x} + deltaX - 20, ${eraseTest.end.y} + deltaY)
+    && !hasInkNear(${eraseTest.start.x} + 20, ${eraseTest.start.y});
+})()`);
+
+const resizeGesture = await evaluate(`(() => {
+  const canvasBounds = document.querySelector("#mathboard-canvas").getBoundingClientRect();
+  const [left, top, width, height] = window.__mathboardLastSelectionBox;
+  return {
+    start: { x: canvasBounds.left + left + width - 1, y: canvasBounds.top + top + height - 1 },
+    end: { x: canvasBounds.left + left + (width * .35), y: canvasBounds.top + top + (height * .35) },
+  };
+})()`);
+await dragPointer(resizeGesture.start, resizeGesture.end);
+await check("scales erased gaps proportionally when resizing objects", `(() => {
+  const canvas = document.querySelector("#mathboard-canvas");
+  const bounds = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const [boxLeft, boxTop, boxWidth, boxHeight] = window.__mathboardLastSelectionBox;
+  const startX = Math.ceil(boxLeft + 9);
+  const endX = Math.floor(boxLeft + boxWidth - 9);
+  const centerY = Math.round((boxTop + (boxHeight / 2)) * scaleY);
+  const inkColumns = [];
+  for (let x = startX; x <= endX; x += 1) {
+    const pixelX = Math.round(x * scaleX);
+    const pixels = canvas.getContext("2d").getImageData(pixelX, centerY - 3, 1, 7).data;
+    inkColumns.push([...pixels].some((value, index) => index % 4 === 3 && value > 20));
+  }
+  const firstInk = inkColumns.indexOf(true);
+  const lastInk = inkColumns.lastIndexOf(true);
+  let currentGap = 0;
+  let largestGap = 0;
+  inkColumns.slice(firstInk, lastInk + 1).forEach((hasInk) => {
+    if (hasInk) currentGap = 0;
+    else {
+      currentGap += 1;
+      largestGap = Math.max(largestGap, currentGap);
+    }
+  });
+  return document.querySelector("#mathboard-history-output").value.startsWith("4 of 4")
+    && firstInk >= 0
+    && largestGap > 2
+    && largestGap < 12;
+})()`);
 
 await evaluate('document.querySelector("#mathboard-history-toggle").click()');
 await check("opens stroke history", 'document.querySelector("#mathboard-history-scrubber").classList.contains("is-visible")');

@@ -2,6 +2,12 @@ import { mathboardTemplate } from "./template.js";
 import { createCanvasExport } from "./canvas-export.js";
 import { coordinateLabelInterval, formatCoordinate } from "./coordinates.js";
 import { renderStroke, shapeLength, strokeWidth } from "./drawing.js";
+import {
+  associateEraser,
+  associateLegacyErasers,
+  eraserMasksForStroke,
+  renderStrokeObjects,
+} from "./object-eraser.js";
 import { createPdfBlob } from "./pdf.js";
 import { getMathBoardElements } from "./dom.js";
 import {
@@ -105,6 +111,7 @@ const {
   eraserPreview,
 } = getMathBoardElements();
 const context = canvas.getContext("2d");
+const objectMaskCanvas = document.createElement("canvas");
 let state = createInitialState();
 let redoStack = [];
 let activeStroke = null;
@@ -694,7 +701,8 @@ function renderBoard() {
   context.translate((bounds.width / 2) + state.panX, (bounds.height / 2) + state.panY);
   context.scale(state.zoom, state.zoom);
   context.translate(-(bounds.width / 2), -(bounds.height / 2));
-  state.strokes.forEach((stroke) => renderStroke(context, stroke, bounds.width, bounds.height));
+  associateLegacyErasers(state.strokes, bounds.width, bounds.height);
+  renderStrokeObjects(context, state.strokes, bounds.width, bounds.height, objectMaskCanvas);
   if (activeStroke) renderStroke(context, activeStroke, bounds.width, bounds.height);
   if (state.tool === "select" && selectedStrokeIndex !== null) {
     renderSelection(context, state.strokes[selectedStrokeIndex], bounds.width, bounds.height, state.zoom);
@@ -870,6 +878,12 @@ function beginSelectionTransform(event, strokeIndex, type, handle = null) {
   if (!geometry) return;
   const start = selectionPoint(event);
   const anchor = handle ? oppositeAnchor(geometry.bounds, handle) : null;
+  const maskTransforms = eraserMasksForStroke(state.strokes, strokeIndex).map((mask) => ({
+    eraserIndex: mask.eraserIndex,
+    target: mask.target,
+    beforePoints: clonePoints(mask.points),
+    beforeRenderWidth: mask.renderWidth,
+  }));
   activeSelectionTransform = {
     type,
     handle,
@@ -878,6 +892,8 @@ function beginSelectionTransform(event, strokeIndex, type, handle = null) {
     anchor,
     startVector: anchor ? { x: start.x - anchor.x, y: start.y - anchor.y } : null,
     beforePoints: clonePoints(stroke.points),
+    beforeWidthScale: Number.isFinite(stroke.widthScale) ? stroke.widthScale : 1,
+    maskTransforms,
     changed: false,
   };
   canvas.setPointerCapture(event.pointerId);
@@ -921,6 +937,9 @@ function continueSelection(event) {
     const deltaY = point.y - interaction.start.y;
     interaction.changed = interaction.changed || Math.hypot(deltaX, deltaY) * state.zoom >= 1;
     stroke.points = translatedPoints(interaction.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
+    interaction.maskTransforms.forEach((mask) => {
+      mask.target.points = translatedPoints(mask.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
+    });
     canvas.dataset.selectionCursor = "move";
   } else {
     const startLengthSquared = (interaction.startVector.x ** 2) + (interaction.startVector.y ** 2);
@@ -942,6 +961,11 @@ function continueSelection(event) {
     const scale = Math.min(20, Math.max(minimumScale, projectedScale));
     interaction.changed = interaction.changed || Math.abs(scale - 1) >= .005;
     stroke.points = scaledPoints(interaction.beforePoints, interaction.anchor, scale, bounds.width, bounds.height);
+    stroke.widthScale = interaction.beforeWidthScale * scale;
+    interaction.maskTransforms.forEach((mask) => {
+      mask.target.points = scaledPoints(mask.beforePoints, interaction.anchor, scale, bounds.width, bounds.height);
+      mask.target.renderWidth = mask.beforeRenderWidth * scale;
+    });
     canvas.dataset.selectionCursor = interaction.handle === "nw" || interaction.handle === "se" ? "nwse-resize" : "nesw-resize";
   }
   renderBoard();
@@ -953,7 +977,14 @@ function finishSelection(event) {
   const interaction = activeSelectionTransform;
   const stroke = state.strokes[interaction.targetIndex];
   const cancelled = event.type === "pointercancel";
-  if (cancelled && stroke) stroke.points = clonePoints(interaction.beforePoints);
+  if (cancelled && stroke) {
+    stroke.points = clonePoints(interaction.beforePoints);
+    stroke.widthScale = interaction.beforeWidthScale;
+    interaction.maskTransforms.forEach((mask) => {
+      mask.target.points = clonePoints(mask.beforePoints);
+      mask.target.renderWidth = mask.beforeRenderWidth;
+    });
+  }
   const changed = interaction.changed && !cancelled && stroke;
   if (changed) {
     state.strokes.push({
@@ -961,6 +992,15 @@ function finishSelection(event) {
       targetIndex: interaction.targetIndex,
       beforePoints: clonePoints(interaction.beforePoints),
       afterPoints: clonePoints(stroke.points),
+      beforeWidthScale: interaction.beforeWidthScale,
+      afterWidthScale: stroke.widthScale,
+      maskTransforms: interaction.maskTransforms.map((mask) => ({
+        eraserIndex: mask.eraserIndex,
+        beforePoints: clonePoints(mask.beforePoints),
+        afterPoints: clonePoints(mask.target.points),
+        beforeRenderWidth: mask.beforeRenderWidth,
+        afterRenderWidth: mask.target.renderWidth,
+      })),
     });
     redoStack = [];
     saveState();
@@ -1117,6 +1157,9 @@ function finishStroke(event) {
     delete activeStroke.drawAssist;
   }
   const shouldCommit = !SHAPE_TOOLS.includes(activeStroke.tool) || shapeLength(activeStroke, bounds.width, bounds.height) >= 2;
+  if (shouldCommit && activeStroke.tool === "eraser") {
+    associateEraser(state.strokes, activeStroke, bounds.width, bounds.height);
+  }
   if (shouldCommit) state.strokes.push(activeStroke);
   activeStroke = null;
   activePointerId = null;

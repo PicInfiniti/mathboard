@@ -1,6 +1,6 @@
 import { strokeWidth } from "./drawing.js";
 
-export const SELECTION_HANDLES = ["nw", "ne", "se", "sw"];
+export const SELECTION_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
 function pixelPoint(point, width, height) {
   return { x: point.x * width, y: point.y * height };
@@ -16,16 +16,18 @@ function pointToSegmentDistance(point, start, end) {
 
 export function isTransformEntry(entry) {
   return entry?.tool === "transform"
-    && Number.isInteger(entry.targetIndex)
-    && Array.isArray(entry.beforePoints)
-    && Array.isArray(entry.afterPoints);
+    && ((Number.isInteger(entry.targetIndex)
+      && Array.isArray(entry.beforePoints)
+      && Array.isArray(entry.afterPoints))
+      || (Array.isArray(entry.transforms) && entry.transforms.length > 0));
 }
 
 export function isVisibilityEntry(entry) {
   return entry?.tool === "visibility"
-    && Number.isInteger(entry.targetIndex)
-    && typeof entry.beforeHidden === "boolean"
-    && typeof entry.afterHidden === "boolean";
+    && ((Number.isInteger(entry.targetIndex)
+      && typeof entry.beforeHidden === "boolean"
+      && typeof entry.afterHidden === "boolean")
+      || (Array.isArray(entry.changes) && entry.changes.length > 0));
 }
 
 export function clonePoints(points) {
@@ -34,6 +36,13 @@ export function clonePoints(points) {
 
 export function applyTransformEntry(strokes, entry, pointsKey) {
   if (!isTransformEntry(entry) || !["beforePoints", "afterPoints"].includes(pointsKey)) return false;
+  const transforms = Array.isArray(entry.transforms) ? entry.transforms : [entry];
+  let applied = false;
+  transforms.forEach((transform) => { applied = applySingleTransform(strokes, transform, pointsKey) || applied; });
+  return applied;
+}
+
+function applySingleTransform(strokes, entry, pointsKey) {
   const target = strokes[entry.targetIndex];
   if (!target?.points) return false;
   target.points = clonePoints(entry[pointsKey]);
@@ -59,10 +68,15 @@ export function applyTransformEntry(strokes, entry, pointsKey) {
 
 export function applyVisibilityEntry(strokes, entry, hiddenKey) {
   if (!isVisibilityEntry(entry) || !["beforeHidden", "afterHidden"].includes(hiddenKey)) return false;
-  const target = strokes[entry.targetIndex];
-  if (!target?.points) return false;
-  target.hidden = entry[hiddenKey];
-  return true;
+  const changes = Array.isArray(entry.changes) ? entry.changes : [entry];
+  let applied = false;
+  changes.forEach((change) => {
+    const target = strokes[change.targetIndex];
+    if (!target?.points || typeof change[hiddenKey] !== "boolean") return;
+    target.hidden = change[hiddenKey];
+    applied = true;
+  });
+  return applied;
 }
 
 export function strokeBounds(stroke, width, height) {
@@ -87,9 +101,19 @@ export function strokeBounds(stroke, width, height) {
 }
 
 export function selectionGeometry(stroke, width, height, zoom) {
-  const bounds = strokeBounds(stroke, width, height);
-  if (!bounds) return null;
-  const padding = (strokeWidth(stroke) / 2) + (8 / zoom);
+  return selectionGeometryForStrokes([stroke], width, height, zoom);
+}
+
+export function selectionGeometryForStrokes(strokes, width, height, zoom) {
+  const entries = strokes.map((stroke) => ({ stroke, bounds: strokeBounds(stroke, width, height) })).filter((entry) => entry.bounds);
+  if (!entries.length) return null;
+  const bounds = {
+    left: Math.min(...entries.map((entry) => entry.bounds.left)),
+    top: Math.min(...entries.map((entry) => entry.bounds.top)),
+    right: Math.max(...entries.map((entry) => entry.bounds.right)),
+    bottom: Math.max(...entries.map((entry) => entry.bounds.bottom)),
+  };
+  const padding = Math.max(...entries.map((entry) => strokeWidth(entry.stroke) / 2)) + (8 / zoom);
   const box = {
     left: bounds.left - padding,
     top: bounds.top - padding,
@@ -101,31 +125,58 @@ export function selectionGeometry(stroke, width, height, zoom) {
     box,
     handles: {
       nw: { x: box.left, y: box.top },
+      n: { x: (box.left + box.right) / 2, y: box.top },
       ne: { x: box.right, y: box.top },
+      e: { x: box.right, y: (box.top + box.bottom) / 2 },
       se: { x: box.right, y: box.bottom },
+      s: { x: (box.left + box.right) / 2, y: box.bottom },
       sw: { x: box.left, y: box.bottom },
+      w: { x: box.left, y: (box.top + box.bottom) / 2 },
     },
   };
 }
 
 export function selectionHandleAt(stroke, point, width, height, zoom) {
   const geometry = selectionGeometry(stroke, width, height, zoom);
+  return selectionHandleAtGeometry(geometry, point, zoom);
+}
+
+export function selectionHandleAtGeometry(geometry, point, zoom) {
   if (!geometry) return null;
   const hitRadius = 11 / zoom;
-  return SELECTION_HANDLES.find((name) => {
+  return SELECTION_HANDLES.map((name) => {
     const handle = geometry.handles[name];
-    return Math.abs(point.x - handle.x) <= hitRadius && Math.abs(point.y - handle.y) <= hitRadius;
-  }) || null;
+    return { name, distance: Math.hypot(point.x - handle.x, point.y - handle.y) };
+  }).filter((item) => item.distance <= hitRadius)
+    .sort((first, second) => first.distance - second.distance)[0]?.name || null;
 }
 
 export function pointInSelection(stroke, point, width, height, zoom) {
   const box = selectionGeometry(stroke, width, height, zoom)?.box;
+  return pointInSelectionGeometry({ box }, point);
+}
+
+export function pointInSelectionGeometry(geometry, point) {
+  const box = geometry?.box;
   return Boolean(box && point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom);
+}
+
+export function strokeIndicesInBox(strokes, box, width, height) {
+  return strokes.reduce((indices, stroke, index) => {
+    const bounds = strokeBounds(stroke, width, height);
+    if (bounds && bounds.left <= box.right && bounds.right >= box.left && bounds.top <= box.bottom && bounds.bottom >= box.top) indices.push(index);
+    return indices;
+  }, []);
 }
 
 export function hitTestStroke(stroke, point, width, height, zoom) {
   if (!stroke?.points?.length || stroke.hidden || stroke.tool === "eraser" || isTransformEntry(stroke)) return false;
   const threshold = (strokeWidth(stroke) / 2) + (7 / zoom);
+  if (stroke.tool === "image") {
+    const bounds = strokeBounds(stroke, width, height);
+    return Boolean(bounds && point.x >= bounds.left - threshold && point.x <= bounds.right + threshold
+      && point.y >= bounds.top - threshold && point.y <= bounds.bottom + threshold);
+  }
   if (stroke.tool === "circle" && stroke.points.length > 1) {
     const start = pixelPoint(stroke.points[0], width, height);
     const end = pixelPoint(stroke.points[1], width, height);
@@ -157,22 +208,30 @@ export function translatedPoints(points, deltaX, deltaY, width, height) {
 }
 
 export function scaledPoints(points, anchor, scale, width, height) {
+  return scaledPointsByAxis(points, anchor, scale, scale, width, height);
+}
+
+export function scaledPointsByAxis(points, anchor, scaleX, scaleY, width, height) {
   return points.map((point) => ({
     ...point,
-    x: (anchor.x + (((point.x * width) - anchor.x) * scale)) / width,
-    y: (anchor.y + (((point.y * height) - anchor.y) * scale)) / height,
+    x: (anchor.x + (((point.x * width) - anchor.x) * scaleX)) / width,
+    y: (anchor.y + (((point.y * height) - anchor.y) * scaleY)) / height,
   }));
 }
 
 export function oppositeAnchor(bounds, handle) {
   return {
-    x: handle.includes("w") ? bounds.right : bounds.left,
-    y: handle.includes("n") ? bounds.bottom : bounds.top,
+    x: handle.includes("w") ? bounds.right : handle.includes("e") ? bounds.left : (bounds.left + bounds.right) / 2,
+    y: handle.includes("n") ? bounds.bottom : handle.includes("s") ? bounds.top : (bounds.top + bounds.bottom) / 2,
   };
 }
 
 export function renderSelection(targetContext, stroke, width, height, zoom) {
   const geometry = selectionGeometry(stroke, width, height, zoom);
+  renderSelectionGeometry(targetContext, geometry, zoom);
+}
+
+export function renderSelectionGeometry(targetContext, geometry, zoom) {
   if (!geometry) return;
   const handleSize = 9 / zoom;
   targetContext.save();

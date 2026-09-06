@@ -6,6 +6,18 @@ export function strokeWidth(stroke) {
   return stroke.size * widthScale;
 }
 
+const imageCache = new Map();
+
+function cachedImage(source) {
+  if (typeof Image === "undefined" || typeof source !== "string") return null;
+  if (imageCache.has(source)) return imageCache.get(source);
+  const image = new Image();
+  image.addEventListener("load", () => document.dispatchEvent(new CustomEvent("mathboard:image-ready")), { once: true });
+  image.src = source;
+  imageCache.set(source, image);
+  return image;
+}
+
 function pressureAdjustedWidth(stroke, point) {
   if (stroke.tool !== "pen" || stroke.pointerType !== "pen") return strokeWidth(stroke);
   const pressure = Number.isFinite(point?.pressure) ? point.pressure : 0.5;
@@ -59,7 +71,17 @@ export function renderStroke(targetContext, stroke, width, height) {
   targetContext.lineCap = "round";
   targetContext.lineJoin = "round";
 
-  if (stroke.tool === "line" && stroke.points.length > 1) {
+  if (stroke.tool === "image" && stroke.points.length > 1) {
+    const image = cachedImage(stroke.src);
+    if (image?.complete && image.naturalWidth) {
+      const [first, second] = stroke.points;
+      const left = Math.min(first.x, second.x) * width;
+      const top = Math.min(first.y, second.y) * height;
+      const imageWidth = Math.abs(second.x - first.x) * width;
+      const imageHeight = Math.abs(second.y - first.y) * height;
+      targetContext.drawImage(image, left, top, imageWidth, imageHeight);
+    }
+  } else if (stroke.tool === "line" && stroke.points.length > 1) {
     renderLine(targetContext, stroke, width, height);
   } else if (stroke.tool === "circle" && stroke.points.length > 1) {
     renderCircle(targetContext, stroke, width, height);

@@ -25,11 +25,12 @@ import {
   findStrokeAt,
   isTransformEntry,
   oppositeAnchor,
-  pointInSelection,
-  renderSelection,
-  scaledPoints,
-  selectionGeometry,
-  selectionHandleAt,
+  pointInSelectionGeometry,
+  renderSelectionGeometry,
+  scaledPointsByAxis,
+  selectionGeometryForStrokes,
+  selectionHandleAtGeometry,
+  strokeIndicesInBox,
   translatedPoints,
 } from "./selection.js";
 import {
@@ -122,7 +123,9 @@ let activePointerType = null;
 let activePan = null;
 let activeZoomSelection = null;
 let activeSelectionTransform = null;
+let activeSelectionMarquee = null;
 let selectedStrokeIndex = null;
+let selectedStrokeIndices = [];
 let objectClipboard = null;
 let pasteCount = 0;
 let lastPenInteraction = 0;
@@ -274,7 +277,9 @@ function applyCanvasState(canvasRecord) {
   activePan = null;
   activeZoomSelection = null;
   activeSelectionTransform = null;
+  activeSelectionMarquee = null;
   selectedStrokeIndex = null;
+  selectedStrokeIndices = [];
   canvas.removeAttribute("data-selection-cursor");
   activePointerId = null;
   activePointerType = null;
@@ -708,8 +713,20 @@ function renderBoard() {
   associateLegacyErasers(state.strokes, bounds.width, bounds.height);
   renderStrokeObjects(context, state.strokes, bounds.width, bounds.height, objectMaskCanvas);
   if (activeStroke) renderStroke(context, activeStroke, bounds.width, bounds.height);
-  if (state.tool === "select" && selectedStrokeIndex !== null) {
-    renderSelection(context, state.strokes[selectedStrokeIndex], bounds.width, bounds.height, state.zoom);
+  if (state.tool === "select" && selectedStrokeIndices.length) {
+    const strokes = selectedObjects().map((item) => item.stroke);
+    renderSelectionGeometry(context, selectionGeometryForStrokes(strokes, bounds.width, bounds.height, state.zoom), state.zoom);
+  }
+  if (state.tool === "select" && activeSelectionMarquee) {
+    const box = marqueeBox(activeSelectionMarquee.start, activeSelectionMarquee.current);
+    context.save();
+    context.fillStyle = "rgba(22, 140, 168, .1)";
+    context.strokeStyle = "#168ca8";
+    context.lineWidth = 1.5 / state.zoom;
+    context.setLineDash([6 / state.zoom, 4 / state.zoom]);
+    context.fillRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+    context.strokeRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
+    context.restore();
   }
   context.restore();
   syncControls();
@@ -853,69 +870,98 @@ function resetView() {
   announce("100% zoom · canvas centered");
 }
 
+function toggleAxes() {
+  state.grid = state.grid === "coordinate" ? "square" : "coordinate";
+  axisLabelSignature = "";
+  saveState();
+  renderBoard();
+  announce(`Coordinate axes ${state.grid === "coordinate" ? "shown" : "hidden"}.`);
+}
+
 function selectionPoint(event) {
   const bounds = canvas.getBoundingClientRect();
   const point = normalizedPoint(event);
   return { x: point.x * bounds.width, y: point.y * bounds.height };
 }
 
-function selectedStroke() {
-  if (selectedStrokeIndex === null) return null;
-  const stroke = state.strokes[selectedStrokeIndex];
-  if (!stroke?.points?.length || stroke.hidden || isTransformEntry(stroke) || stroke.tool === "eraser") {
-    selectedStrokeIndex = null;
-    return null;
-  }
-  return stroke;
+function isSelectableStroke(stroke) {
+  return Boolean(stroke?.points?.length && !stroke.hidden && !isTransformEntry(stroke) && stroke.tool !== "eraser" && stroke.tool !== "visibility");
+}
+
+function setSelection(indices) {
+  selectedStrokeIndices = [...new Set(indices)].filter((index) => Number.isInteger(index) && isSelectableStroke(state.strokes[index]));
+  selectedStrokeIndex = selectedStrokeIndices.at(-1) ?? null;
+}
+
+function selectedObjects() {
+  setSelection(selectedStrokeIndices);
+  return selectedStrokeIndices.map((index) => ({ index, stroke: state.strokes[index] }));
+}
+
+function currentSelectionGeometry(bounds = canvas.getBoundingClientRect()) {
+  return selectionGeometryForStrokes(selectedObjects().map((item) => item.stroke), bounds.width, bounds.height, state.zoom);
+}
+
+function marqueeBox(first, second) {
+  return {
+    left: Math.min(first.x, second.x),
+    top: Math.min(first.y, second.y),
+    right: Math.max(first.x, second.x),
+    bottom: Math.max(first.y, second.y),
+  };
 }
 
 function clearSelection() {
   selectedStrokeIndex = null;
+  selectedStrokeIndices = [];
   activeSelectionTransform = null;
+  activeSelectionMarquee = null;
   canvas.removeAttribute("data-selection-cursor");
 }
 
 function copySelectedObject(shouldAnnounce = true) {
-  const stroke = selectedStroke();
-  if (!stroke) {
+  const objects = selectedObjects();
+  if (!objects.length) {
     if (shouldAnnounce) announce("Select an object to copy.");
     return false;
   }
-  const copiedStroke = JSON.parse(JSON.stringify(stroke));
-  delete copiedStroke.hidden;
-  delete copiedStroke.inlineErasers;
-  copiedStroke.inlineErasers = eraserMasksForStroke(state.strokes, selectedStrokeIndex).map((mask) => {
-    const copiedMask = JSON.parse(JSON.stringify(mask.eraser));
-    delete copiedMask.targets;
-    copiedMask.points = clonePoints(mask.points);
-    copiedMask.renderWidth = mask.renderWidth;
-    return copiedMask;
+  objectClipboard = objects.map(({ index, stroke }) => {
+    const copiedStroke = JSON.parse(JSON.stringify(stroke));
+    delete copiedStroke.hidden;
+    delete copiedStroke.inlineErasers;
+    copiedStroke.inlineErasers = eraserMasksForStroke(state.strokes, index).map((mask) => {
+      const copiedMask = JSON.parse(JSON.stringify(mask.eraser));
+      delete copiedMask.targets;
+      copiedMask.points = clonePoints(mask.points);
+      copiedMask.renderWidth = mask.renderWidth;
+      return copiedMask;
+    });
+    return copiedStroke;
   });
-  objectClipboard = copiedStroke;
   pasteCount = 0;
-  if (shouldAnnounce) announce("Object copied · press P to paste.");
+  if (shouldAnnounce) announce(`${objects.length === 1 ? "Object" : `${objects.length} objects`} copied · press P to paste.`);
   return true;
 }
 
 function deleteSelectedObject(message = "Object deleted.") {
-  const stroke = selectedStroke();
-  if (!stroke) {
+  const objects = selectedObjects();
+  if (!objects.length) {
     announce("Select an object to delete.");
     return false;
   }
-  const targetIndex = selectedStrokeIndex;
-  stroke.hidden = true;
+  const changes = objects.map(({ index, stroke }) => {
+    stroke.hidden = true;
+    return { targetIndex: index, beforeHidden: false, afterHidden: true };
+  });
   state.strokes.push({
     tool: "visibility",
-    targetIndex,
-    beforeHidden: false,
-    afterHidden: true,
+    ...(changes.length === 1 ? changes[0] : { changes }),
   });
   redoStack = [];
   clearSelection();
   saveState();
   renderBoard();
-  announce(message);
+  announce(objects.length === 1 ? message : `${objects.length} objects ${message.startsWith("Object cut") ? "cut" : "deleted"}.`);
   return true;
 }
 
@@ -928,27 +974,30 @@ function cutSelectedObject() {
 }
 
 function pasteObject(message = "Object pasted.") {
-  if (!objectClipboard) {
+  if (!objectClipboard?.length) {
     announce("Copy or cut an object before pasting.");
     return false;
   }
   const bounds = canvas.getBoundingClientRect();
   pasteCount += 1;
   const offset = 18 * pasteCount;
-  const pastedStroke = JSON.parse(JSON.stringify(objectClipboard));
-  pastedStroke.points = translatedPoints(pastedStroke.points, offset, offset, bounds.width, bounds.height);
-  pastedStroke.inlineErasers = (pastedStroke.inlineErasers || []).map((eraser) => ({
-    ...eraser,
-    points: translatedPoints(eraser.points, offset, offset, bounds.width, bounds.height),
-  }));
-  delete pastedStroke.hidden;
-  state.strokes.push(pastedStroke);
-  selectedStrokeIndex = state.strokes.length - 1;
+  const pastedIndices = objectClipboard.map((clipboardStroke) => {
+    const pastedStroke = JSON.parse(JSON.stringify(clipboardStroke));
+    pastedStroke.points = translatedPoints(pastedStroke.points, offset, offset, bounds.width, bounds.height);
+    pastedStroke.inlineErasers = (pastedStroke.inlineErasers || []).map((eraser) => ({
+      ...eraser,
+      points: translatedPoints(eraser.points, offset, offset, bounds.width, bounds.height),
+    }));
+    delete pastedStroke.hidden;
+    state.strokes.push(pastedStroke);
+    return state.strokes.length - 1;
+  });
+  setSelection(pastedIndices);
   state.tool = "select";
   redoStack = [];
   saveState();
   renderBoard();
-  announce(message);
+  announce(pastedIndices.length === 1 ? message : `${pastedIndices.length} objects ${message.startsWith("Object duplicated") ? "duplicated" : "pasted"}.`);
   return true;
 }
 
@@ -958,6 +1007,65 @@ function duplicateSelectedObject() {
     return false;
   }
   return pasteObject("Object duplicated.");
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result), { once: true });
+    reader.addEventListener("error", () => reject(reader.error), { once: true });
+    reader.readAsDataURL(file);
+  });
+}
+
+function imageSize(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve({ width: image.naturalWidth, height: image.naturalHeight }), { once: true });
+    image.addEventListener("error", reject, { once: true });
+    image.src = source;
+  });
+}
+
+async function pasteClipboardImage(file) {
+  if (!file || !["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
+    announce("That clipboard image format is not supported.");
+    return false;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    announce("Clipboard images must be smaller than 8 MB.");
+    return false;
+  }
+  try {
+    announce("Adding clipboard image…");
+    const src = await readFileAsDataUrl(file);
+    const dimensions = await imageSize(src);
+    const bounds = canvas.getBoundingClientRect();
+    const screenScale = Math.min((bounds.width * .45) / dimensions.width, (bounds.height * .45) / dimensions.height, 1);
+    const width = (dimensions.width * screenScale) / state.zoom;
+    const height = (dimensions.height * screenScale) / state.zoom;
+    const centerX = (bounds.width / 2) - (state.panX / state.zoom);
+    const centerY = (bounds.height / 2) - (state.panY / state.zoom);
+    state.strokes.push({
+      tool: "image",
+      src,
+      size: 1,
+      points: [
+        { x: (centerX - (width / 2)) / bounds.width, y: (centerY - (height / 2)) / bounds.height, pressure: .5 },
+        { x: (centerX + (width / 2)) / bounds.width, y: (centerY + (height / 2)) / bounds.height, pressure: .5 },
+      ],
+    });
+    setSelection([state.strokes.length - 1]);
+    state.tool = "select";
+    redoStack = [];
+    saveState();
+    renderBoard();
+    announce("Clipboard image added as an object.");
+    return true;
+  } catch {
+    announce("The clipboard image could not be added.");
+    return false;
+  }
 }
 
 function closeContextMenu({ restoreFocus = false } = {}) {
@@ -995,12 +1103,12 @@ function openContextMenu(event) {
   event.preventDefault();
   const bounds = canvas.getBoundingClientRect();
   const point = selectionPoint(event);
-  const current = selectedStroke();
+  const geometry = currentSelectionGeometry(bounds);
   const hitIndex = findStrokeAt(state.strokes, point, bounds.width, bounds.height, state.zoom)
-    ?? (current && pointInSelection(current, point, bounds.width, bounds.height, state.zoom) ? selectedStrokeIndex : null);
+    ?? (pointInSelectionGeometry(geometry, point) ? selectedStrokeIndex : null);
   const hasObject = hitIndex !== null;
   if (hasObject) {
-    selectedStrokeIndex = hitIndex;
+    if (!selectedStrokeIndices.includes(hitIndex)) setSelection([hitIndex]);
     state.tool = "select";
   } else {
     clearSelection();
@@ -1011,17 +1119,18 @@ function openContextMenu(event) {
     ? [
       { action: "cut", icon: "✂", label: "Cut", shortcut: "X" },
       { action: "copy", icon: "⧉", label: "Copy", shortcut: "Y" },
-      { action: "duplicate", icon: "+", label: "Duplicate", shortcut: "D" },
+      { action: "duplicate", icon: "+", label: "Duplicate" },
       "divider",
       { action: "delete", icon: "×", label: "Delete", shortcut: "Del", danger: true },
     ]
     : [
-      { action: "paste", icon: "▣", label: "Paste", shortcut: "P", disabled: !objectClipboard },
+      { action: "paste", icon: "▣", label: "Paste", shortcut: "P", disabled: !objectClipboard?.length },
       "divider",
       { action: "undo", icon: "↶", label: "Undo", shortcut: "U", disabled: state.strokes.length === 0 },
       { action: "redo", icon: "↷", label: "Redo", shortcut: "R", disabled: redoStack.length === 0 },
       { action: "history", icon: "◴", label: "History", shortcut: "H", disabled: state.strokes.length + redoStack.length === 0 },
       "divider",
+      { action: "axes", icon: "⌗", label: state.grid === "coordinate" ? "Hide axes" : "Show axes" },
       { action: "reset-view", icon: "↺", label: "Reset view" },
       { action: "fullscreen", icon: "⛶", label: isFullscreenMode() ? "Exit full screen" : "Full screen", shortcut: "F" },
       { action: "clear", icon: "⌫", label: "Clear board", danger: true, disabled: !state.strokes.length },
@@ -1049,35 +1158,40 @@ function runContextAction(action) {
   else if (action === "undo") undo();
   else if (action === "redo") redo();
   else if (action === "history") toggleHistoryScrubber();
+  else if (action === "axes") toggleAxes();
   else if (action === "reset-view") resetView();
   else if (action === "fullscreen") toggleFullscreenMode();
   else if (action === "clear") requestClearBoard();
 }
 
-function beginSelectionTransform(event, strokeIndex, type, handle = null) {
+function beginSelectionTransform(event, type, handle = null) {
   const bounds = canvas.getBoundingClientRect();
-  const stroke = state.strokes[strokeIndex];
-  const geometry = selectionGeometry(stroke, bounds.width, bounds.height, state.zoom);
+  const objects = selectedObjects();
+  const geometry = selectionGeometryForStrokes(objects.map((item) => item.stroke), bounds.width, bounds.height, state.zoom);
   if (!geometry) return;
   const start = selectionPoint(event);
   const anchor = handle ? oppositeAnchor(geometry.bounds, handle) : null;
-  const maskTransforms = eraserMasksForStroke(state.strokes, strokeIndex).map((mask) => ({
-    eraserIndex: mask.eraserIndex,
-    inlineMaskIndex: mask.inlineMaskIndex,
-    target: mask.target,
-    beforePoints: clonePoints(mask.points),
-    beforeRenderWidth: mask.renderWidth,
+  const targets = objects.map(({ index, stroke }) => ({
+    targetIndex: index,
+    target: stroke,
+    beforePoints: clonePoints(stroke.points),
+    beforeWidthScale: Number.isFinite(stroke.widthScale) ? stroke.widthScale : 1,
+    maskTransforms: eraserMasksForStroke(state.strokes, index).map((mask) => ({
+      eraserIndex: mask.eraserIndex,
+      inlineMaskIndex: mask.inlineMaskIndex,
+      target: mask.target,
+      beforePoints: clonePoints(mask.points),
+      beforeRenderWidth: mask.renderWidth,
+    })),
   }));
   activeSelectionTransform = {
     type,
     handle,
-    targetIndex: strokeIndex,
+    targets,
     start,
     anchor,
     startVector: anchor ? { x: start.x - anchor.x, y: start.y - anchor.y } : null,
-    beforePoints: clonePoints(stroke.points),
-    beforeWidthScale: Number.isFinite(stroke.widthScale) ? stroke.widthScale : 1,
-    maskTransforms,
+    originalBounds: geometry.bounds,
     changed: false,
   };
   canvas.setPointerCapture(event.pointerId);
@@ -1086,25 +1200,40 @@ function beginSelectionTransform(event, strokeIndex, type, handle = null) {
 function startSelection(event) {
   const bounds = canvas.getBoundingClientRect();
   const point = selectionPoint(event);
-  const current = selectedStroke();
-  if (current) {
-    const handle = selectionHandleAt(current, point, bounds.width, bounds.height, state.zoom);
+  const geometry = currentSelectionGeometry(bounds);
+  if (geometry) {
+    const handle = selectionHandleAtGeometry(geometry, point, state.zoom);
     if (handle) {
-      beginSelectionTransform(event, selectedStrokeIndex, "resize", handle);
+      beginSelectionTransform(event, "resize", handle);
       return;
     }
-    if (pointInSelection(current, point, bounds.width, bounds.height, state.zoom)) {
-      beginSelectionTransform(event, selectedStrokeIndex, "move");
+    if (pointInSelectionGeometry(geometry, point) && !(event.ctrlKey || event.metaKey)) {
+      beginSelectionTransform(event, "move");
       return;
     }
   }
 
   const hitIndex = findStrokeAt(state.strokes, point, bounds.width, bounds.height, state.zoom);
-  selectedStrokeIndex = hitIndex;
-  if (hitIndex !== null) beginSelectionTransform(event, hitIndex, "move");
-  else {
+  if (hitIndex !== null && (event.ctrlKey || event.metaKey)) {
+    setSelection(selectedStrokeIndices.includes(hitIndex)
+      ? selectedStrokeIndices.filter((index) => index !== hitIndex)
+      : [...selectedStrokeIndices, hitIndex]);
     activePointerId = null;
     activePointerType = null;
+    announce(selectedStrokeIndices.length
+      ? `${selectedStrokeIndices.length} object${selectedStrokeIndices.length === 1 ? "" : "s"} selected.`
+      : "Selection cleared.");
+  } else if (hitIndex !== null) {
+    if (!selectedStrokeIndices.includes(hitIndex)) setSelection([hitIndex]);
+    beginSelectionTransform(event, "move");
+  } else {
+    activeSelectionMarquee = {
+      start: point,
+      current: point,
+      baseIndices: (event.ctrlKey || event.metaKey) ? [...selectedStrokeIndices] : [],
+    };
+    if (!(event.ctrlKey || event.metaKey)) setSelection([]);
+    canvas.setPointerCapture(event.pointerId);
   }
   renderBoard();
 }
@@ -1113,44 +1242,49 @@ function continueSelection(event) {
   if (!activeSelectionTransform || event.pointerId !== activePointerId) return;
   const bounds = canvas.getBoundingClientRect();
   const interaction = activeSelectionTransform;
-  const stroke = state.strokes[interaction.targetIndex];
-  if (!stroke) return;
   const point = selectionPoint(event);
   if (interaction.type === "move") {
     const deltaX = point.x - interaction.start.x;
     const deltaY = point.y - interaction.start.y;
     interaction.changed = interaction.changed || Math.hypot(deltaX, deltaY) * state.zoom >= 1;
-    stroke.points = translatedPoints(interaction.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
-    interaction.maskTransforms.forEach((mask) => {
-      mask.target.points = translatedPoints(mask.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
+    interaction.targets.forEach((target) => {
+      target.target.points = translatedPoints(target.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
+      target.maskTransforms.forEach((mask) => {
+        mask.target.points = translatedPoints(mask.beforePoints, deltaX, deltaY, bounds.width, bounds.height);
+      });
     });
     canvas.dataset.selectionCursor = "move";
   } else {
     const startLengthSquared = (interaction.startVector.x ** 2) + (interaction.startVector.y ** 2);
     if (startLengthSquared <= 0) return;
     const currentVector = { x: point.x - interaction.anchor.x, y: point.y - interaction.anchor.y };
-    const projectedScale = ((currentVector.x * interaction.startVector.x) + (currentVector.y * interaction.startVector.y)) / startLengthSquared;
-    const originalGeometry = selectionGeometry(
-      { ...stroke, points: interaction.beforePoints },
-      bounds.width,
-      bounds.height,
-      state.zoom,
-    );
-    const originalSize = Math.max(
-      originalGeometry.bounds.right - originalGeometry.bounds.left,
-      originalGeometry.bounds.bottom - originalGeometry.bounds.top,
-      1,
-    );
-    const minimumScale = Math.min(1, 14 / (originalSize * state.zoom));
-    const scale = Math.min(20, Math.max(minimumScale, projectedScale));
-    interaction.changed = interaction.changed || Math.abs(scale - 1) >= .005;
-    stroke.points = scaledPoints(interaction.beforePoints, interaction.anchor, scale, bounds.width, bounds.height);
-    stroke.widthScale = interaction.beforeWidthScale * scale;
-    interaction.maskTransforms.forEach((mask) => {
-      mask.target.points = scaledPoints(mask.beforePoints, interaction.anchor, scale, bounds.width, bounds.height);
-      mask.target.renderWidth = mask.beforeRenderWidth * scale;
+    const isCorner = interaction.handle.length === 2;
+    const originalWidth = Math.max(interaction.originalBounds.right - interaction.originalBounds.left, 1);
+    const originalHeight = Math.max(interaction.originalBounds.bottom - interaction.originalBounds.top, 1);
+    const minimumScaleX = Math.min(1, 14 / (originalWidth * state.zoom));
+    const minimumScaleY = Math.min(1, 14 / (originalHeight * state.zoom));
+    let scaleX = 1;
+    let scaleY = 1;
+    if (isCorner) {
+      const projectedScale = ((currentVector.x * interaction.startVector.x) + (currentVector.y * interaction.startVector.y)) / startLengthSquared;
+      const scale = Math.min(20, Math.max(Math.min(minimumScaleX, minimumScaleY), projectedScale));
+      scaleX = scale;
+      scaleY = scale;
+    } else if (interaction.handle === "e" || interaction.handle === "w") {
+      scaleX = Math.min(20, Math.max(minimumScaleX, currentVector.x / interaction.startVector.x));
+    } else {
+      scaleY = Math.min(20, Math.max(minimumScaleY, currentVector.y / interaction.startVector.y));
+    }
+    interaction.changed = interaction.changed || Math.abs(scaleX - 1) >= .005 || Math.abs(scaleY - 1) >= .005;
+    interaction.targets.forEach((target) => {
+      target.target.points = scaledPointsByAxis(target.beforePoints, interaction.anchor, scaleX, scaleY, bounds.width, bounds.height);
+      target.target.widthScale = target.beforeWidthScale * (isCorner ? scaleX : 1);
+      target.maskTransforms.forEach((mask) => {
+        mask.target.points = scaledPointsByAxis(mask.beforePoints, interaction.anchor, scaleX, scaleY, bounds.width, bounds.height);
+        mask.target.renderWidth = mask.beforeRenderWidth * (isCorner ? scaleX : 1);
+      });
     });
-    canvas.dataset.selectionCursor = interaction.handle === "nw" || interaction.handle === "se" ? "nwse-resize" : "nesw-resize";
+    canvas.dataset.selectionCursor = selectionCursorForHandle(interaction.handle);
   }
   renderBoard();
   event.preventDefault();
@@ -1159,32 +1293,35 @@ function continueSelection(event) {
 function finishSelection(event) {
   if (!activeSelectionTransform || event.pointerId !== activePointerId) return;
   const interaction = activeSelectionTransform;
-  const stroke = state.strokes[interaction.targetIndex];
   const cancelled = event.type === "pointercancel";
-  if (cancelled && stroke) {
-    stroke.points = clonePoints(interaction.beforePoints);
-    stroke.widthScale = interaction.beforeWidthScale;
-    interaction.maskTransforms.forEach((mask) => {
-      mask.target.points = clonePoints(mask.beforePoints);
-      mask.target.renderWidth = mask.beforeRenderWidth;
+  if (cancelled) {
+    interaction.targets.forEach((target) => {
+      target.target.points = clonePoints(target.beforePoints);
+      target.target.widthScale = target.beforeWidthScale;
+      target.maskTransforms.forEach((mask) => {
+        mask.target.points = clonePoints(mask.beforePoints);
+        mask.target.renderWidth = mask.beforeRenderWidth;
+      });
     });
   }
-  const changed = interaction.changed && !cancelled && stroke;
+  const changed = interaction.changed && !cancelled;
   if (changed) {
     state.strokes.push({
       tool: "transform",
-      targetIndex: interaction.targetIndex,
-      beforePoints: clonePoints(interaction.beforePoints),
-      afterPoints: clonePoints(stroke.points),
-      beforeWidthScale: interaction.beforeWidthScale,
-      afterWidthScale: stroke.widthScale,
-      maskTransforms: interaction.maskTransforms.map((mask) => ({
-        eraserIndex: mask.eraserIndex,
-        inlineMaskIndex: mask.inlineMaskIndex,
-        beforePoints: clonePoints(mask.beforePoints),
-        afterPoints: clonePoints(mask.target.points),
-        beforeRenderWidth: mask.beforeRenderWidth,
-        afterRenderWidth: mask.target.renderWidth,
+      transforms: interaction.targets.map((target) => ({
+        targetIndex: target.targetIndex,
+        beforePoints: clonePoints(target.beforePoints),
+        afterPoints: clonePoints(target.target.points),
+        beforeWidthScale: target.beforeWidthScale,
+        afterWidthScale: target.target.widthScale,
+        maskTransforms: target.maskTransforms.map((mask) => ({
+          eraserIndex: mask.eraserIndex,
+          inlineMaskIndex: mask.inlineMaskIndex,
+          beforePoints: clonePoints(mask.beforePoints),
+          afterPoints: clonePoints(mask.target.points),
+          beforeRenderWidth: mask.beforeRenderWidth,
+          afterRenderWidth: mask.target.renderWidth,
+        })),
       })),
     });
     redoStack = [];
@@ -1196,22 +1333,51 @@ function finishSelection(event) {
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
   canvas.removeAttribute("data-selection-cursor");
   renderBoard();
-  if (changed) announce(interaction.type === "resize" ? "Object resized." : "Object moved.");
+  if (changed) announce(`${interaction.targets.length === 1 ? "Object" : `${interaction.targets.length} objects`} ${interaction.type === "resize" ? "resized" : "moved"}.`);
+}
+
+function continueSelectionMarquee(event) {
+  if (!activeSelectionMarquee || event.pointerId !== activePointerId) return;
+  activeSelectionMarquee.current = selectionPoint(event);
+  renderBoard();
+  event.preventDefault();
+}
+
+function finishSelectionMarquee(event) {
+  if (!activeSelectionMarquee || event.pointerId !== activePointerId) return;
+  const bounds = canvas.getBoundingClientRect();
+  const marquee = activeSelectionMarquee;
+  marquee.current = selectionPoint(event);
+  const box = marqueeBox(marquee.start, marquee.current);
+  const isClick = Math.hypot(box.right - box.left, box.bottom - box.top) < 4 / state.zoom;
+  const hits = isClick ? [] : strokeIndicesInBox(state.strokes, box, bounds.width, bounds.height);
+  setSelection([...marquee.baseIndices, ...hits]);
+  activeSelectionMarquee = null;
+  activePointerId = null;
+  activePointerType = null;
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  renderBoard();
+  if (hits.length) announce(`${selectedStrokeIndices.length} object${selectedStrokeIndices.length === 1 ? "" : "s"} selected.`);
 }
 
 function updateSelectionCursor(event) {
   if (state.tool !== "select" || activeSelectionTransform) return;
-  const stroke = selectedStroke();
-  if (!stroke) {
+  const geometry = currentSelectionGeometry();
+  if (!geometry) {
     canvas.removeAttribute("data-selection-cursor");
     return;
   }
-  const bounds = canvas.getBoundingClientRect();
   const point = selectionPoint(event);
-  const handle = selectionHandleAt(stroke, point, bounds.width, bounds.height, state.zoom);
-  if (handle) canvas.dataset.selectionCursor = handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize";
-  else if (pointInSelection(stroke, point, bounds.width, bounds.height, state.zoom)) canvas.dataset.selectionCursor = "move";
+  const handle = selectionHandleAtGeometry(geometry, point, state.zoom);
+  if (handle) canvas.dataset.selectionCursor = selectionCursorForHandle(handle);
+  else if (pointInSelectionGeometry(geometry, point)) canvas.dataset.selectionCursor = "move";
   else canvas.removeAttribute("data-selection-cursor");
+}
+
+function selectionCursorForHandle(handle) {
+  if (handle === "n" || handle === "s") return "ns-resize";
+  if (handle === "e" || handle === "w") return "ew-resize";
+  return handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize";
 }
 
 function startStroke(event) {
@@ -1269,6 +1435,10 @@ function startStroke(event) {
 }
 
 function continueStroke(event) {
+  if (activeSelectionMarquee && event.pointerId === activePointerId) {
+    continueSelectionMarquee(event);
+    return;
+  }
   if (activeSelectionTransform && event.pointerId === activePointerId) {
     continueSelection(event);
     return;
@@ -1299,6 +1469,10 @@ function continueStroke(event) {
 }
 
 function finishStroke(event) {
+  if (activeSelectionMarquee && event.pointerId === activePointerId) {
+    finishSelectionMarquee(event);
+    return;
+  }
   if (activeSelectionTransform && event.pointerId === activePointerId) {
     finishSelection(event);
     return;
@@ -1646,7 +1820,7 @@ toolButtons.forEach((button) => {
     state.tool = button.dataset.tool;
     if (state.tool !== "select") clearSelection();
     if (DRAWING_TOOLS.includes(state.tool)) state.lastDrawingTool = state.tool;
-    syncControls();
+    renderBoard();
     saveState();
     announce(`${button.textContent.trim()} selected.`);
   });
@@ -1654,8 +1828,11 @@ toolButtons.forEach((button) => {
 
 assistButton.addEventListener("click", () => {
   state.drawAssist = !state.drawAssist;
-  if (state.drawAssist) state.tool = "pen";
-  syncControls();
+  if (state.drawAssist) {
+    state.tool = "pen";
+    clearSelection();
+  }
+  renderBoard();
   saveState();
   announce(`Draw assist ${state.drawAssist ? "enabled" : "disabled"}.`);
 });
@@ -1920,7 +2097,7 @@ canvas.addEventListener("pointerleave", hideEraserPreview);
 canvas.addEventListener("pointerup", finishStroke);
 canvas.addEventListener("pointercancel", finishStroke);
 canvas.addEventListener("lostpointercapture", (event) => {
-  if ((activeStroke || activePan || activeZoomSelection || activeSelectionTransform) && event.pointerId === activePointerId) finishStroke(event);
+  if ((activeStroke || activePan || activeZoomSelection || activeSelectionTransform || activeSelectionMarquee) && event.pointerId === activePointerId) finishStroke(event);
 });
 canvas.addEventListener("contextmenu", openContextMenu);
 contextMenu.addEventListener("click", (event) => {
@@ -1979,15 +2156,14 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && activeSelectionTransform) {
     const pointerId = activePointerId;
-    const target = state.strokes[activeSelectionTransform.targetIndex];
-    if (target) {
-      target.points = clonePoints(activeSelectionTransform.beforePoints);
-      target.widthScale = activeSelectionTransform.beforeWidthScale;
-      activeSelectionTransform.maskTransforms.forEach((mask) => {
+    activeSelectionTransform.targets.forEach((target) => {
+      target.target.points = clonePoints(target.beforePoints);
+      target.target.widthScale = target.beforeWidthScale;
+      target.maskTransforms.forEach((mask) => {
         mask.target.points = clonePoints(mask.beforePoints);
         mask.target.renderWidth = mask.beforeRenderWidth;
       });
-    }
+    });
     clearSelection();
     activePointerId = null;
     activePointerType = null;
@@ -1996,7 +2172,17 @@ document.addEventListener("keydown", (event) => {
     announce("Object change cancelled.");
     return;
   }
-  if (event.key === "Escape" && selectedStrokeIndex !== null) {
+  if (event.key === "Escape" && activeSelectionMarquee) {
+    const pointerId = activePointerId;
+    activeSelectionMarquee = null;
+    activePointerId = null;
+    activePointerType = null;
+    if (pointerId !== null && canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+    renderBoard();
+    announce("Area selection cancelled.");
+    return;
+  }
+  if (event.key === "Escape" && selectedStrokeIndices.length) {
     clearSelection();
     renderBoard();
     announce("Selection cleared.");
@@ -2029,7 +2215,7 @@ document.addEventListener("keydown", (event) => {
     || target instanceof HTMLSelectElement
     || target?.isContentEditable;
   const shortcut = event.key.toLowerCase();
-  const singleKeyAction = ["d", "x", "y", "p", "u", "r", "h", "f"].includes(shortcut)
+  const singleKeyAction = ["d", "x", "y", "p", "u", "r", "h", "f", "+", "=", "-"].includes(shortcut)
     || event.key === "Delete"
     || event.key === "Backspace";
   if (!modifier && !event.altKey && !event.repeat && !isTyping && !renameCanvasDialog.open && singleKeyAction) {
@@ -2043,6 +2229,8 @@ document.addEventListener("keydown", (event) => {
     else if (shortcut === "r") redo();
     else if (shortcut === "h") toggleHistoryScrubber();
     else if (shortcut === "f") toggleFullscreenMode();
+    else if (shortcut === "+" || shortcut === "=") zoomIn();
+    else if (shortcut === "-") zoomOut();
     else deleteSelectedObject();
     return;
   }
@@ -2051,6 +2239,19 @@ document.addEventListener("keydown", (event) => {
   if (event.shiftKey) redo();
   else undo();
 });
+
+document.addEventListener("paste", (event) => {
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+  const imageItem = [...(event.clipboardData?.items || [])].find((item) => item.kind === "file" && item.type.startsWith("image/"));
+  const imageFile = imageItem?.getAsFile() || [...(event.clipboardData?.files || [])].find((file) => file.type.startsWith("image/"));
+  if (!imageFile) return;
+  event.preventDefault();
+  closeContextMenu();
+  pasteClipboardImage(imageFile);
+});
+
+document.addEventListener("mathboard:image-ready", renderBoard);
 
 document.addEventListener("fullscreenchange", syncFullscreenMode);
 document.addEventListener("visibilitychange", () => {

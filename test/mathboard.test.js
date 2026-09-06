@@ -16,8 +16,12 @@ import {
   findStrokeAt,
   oppositeAnchor,
   scaledPoints,
+  scaledPointsByAxis,
   selectionGeometry,
+  selectionGeometryForStrokes,
+  selectionHandleAtGeometry,
   strokeBounds,
+  strokeIndicesInBox,
   translatedPoints,
 } from "../src/mathboard/selection.js";
 import {
@@ -177,6 +181,8 @@ test("selects, moves, and proportionally resizes stroke objects", () => {
 
   assert.deepEqual(strokeBounds(circle, 100, 100), { left: 55, top: 35, right: 85, bottom: 65 });
   const geometry = selectionGeometry(line, 100, 100, 1);
+  assert.equal(Object.keys(geometry.handles).length, 8);
+  assert.equal(selectionHandleAtGeometry(geometry, { x: geometry.box.right - 1, y: geometry.box.bottom - 1 }, 1), "se");
   const anchor = oppositeAnchor(geometry.bounds, "se");
   assert.deepEqual(anchor, { x: 10, y: 20 });
 
@@ -187,6 +193,9 @@ test("selects, moves, and proportionally resizes stroke objects", () => {
   const resized = scaledPoints(line.points, anchor, 2, 100, 100);
   assert.ok(Math.abs(resized[0].x - .1) < .000001 && Math.abs(resized[0].y - .2) < .000001);
   assert.ok(Math.abs(resized[1].x - .7) < .000001 && Math.abs(resized[1].y - .8) < .000001);
+
+  const stretched = scaledPointsByAxis(line.points, { x: 10, y: 35 }, 2, 1, 100, 100);
+  assert.ok(Math.abs(stretched[1].x - .7) < .000001 && Math.abs(stretched[1].y - .5) < .000001);
 
   const strokes = [{ ...line, points: resized }];
   const historyEntry = {
@@ -199,6 +208,45 @@ test("selects, moves, and proportionally resizes stroke objects", () => {
   assert.deepEqual(strokes[0].points, line.points);
   assert.equal(applyTransformEntry(strokes, historyEntry, "afterPoints"), true);
   assert.deepEqual(strokes[0].points, resized);
+});
+
+test("selects multiple objects by area and applies grouped history", () => {
+  const first = { tool: "line", size: 4, points: [{ x: .1, y: .2 }, { x: .3, y: .4 }] };
+  const second = { tool: "line", size: 4, points: [{ x: .6, y: .5 }, { x: .8, y: .7 }] };
+  const strokes = [first, second];
+  assert.deepEqual(strokeIndicesInBox(strokes, { left: 5, top: 10, right: 85, bottom: 75 }, 100, 100), [0, 1]);
+  assert.deepEqual(selectionGeometryForStrokes(strokes, 100, 100, 1).bounds, {
+    left: 10,
+    top: 20,
+    right: 80,
+    bottom: 70,
+  });
+
+  const movedFirst = translatedPoints(first.points, 5, 5, 100, 100);
+  const movedSecond = translatedPoints(second.points, 5, 5, 100, 100);
+  const transform = {
+    tool: "transform",
+    transforms: [
+      { targetIndex: 0, beforePoints: first.points, afterPoints: movedFirst },
+      { targetIndex: 1, beforePoints: second.points, afterPoints: movedSecond },
+    ],
+  };
+  assert.equal(applyTransformEntry(strokes, transform, "afterPoints"), true);
+  assert.deepEqual(strokes.map((stroke) => stroke.points), [movedFirst, movedSecond]);
+  assert.equal(applyTransformEntry(strokes, transform, "beforePoints"), true);
+  assert.deepEqual(strokes.map((stroke) => stroke.points), [first.points, second.points]);
+
+  const visibility = {
+    tool: "visibility",
+    changes: [
+      { targetIndex: 0, beforeHidden: false, afterHidden: true },
+      { targetIndex: 1, beforeHidden: false, afterHidden: true },
+    ],
+  };
+  assert.equal(applyVisibilityEntry(strokes, visibility, "afterHidden"), true);
+  assert.deepEqual(strokes.map((stroke) => stroke.hidden), [true, true]);
+  assert.equal(applyVisibilityEntry(strokes, visibility, "beforeHidden"), true);
+  assert.deepEqual(strokes.map((stroke) => stroke.hidden), [false, false]);
 });
 
 test("associates erasures with affected objects so their masks can move with them", () => {

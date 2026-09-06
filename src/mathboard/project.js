@@ -1,6 +1,6 @@
 export const PROJECT_FORMAT = "mathboard";
 const LEGACY_PROJECT_FORMAT = "math-1280-whiteboard";
-const STROKE_TOOLS = ["pen", "highlighter", "eraser", "line", "circle"];
+const STROKE_TOOLS = ["pen", "highlighter", "eraser", "line", "circle", "image"];
 
 export function isSupportedProject(project) {
   return [PROJECT_FORMAT, LEGACY_PROJECT_FORMAT].includes(project?.format)
@@ -33,6 +33,11 @@ export function sanitizeImportedStroke(stroke, budget) {
     pointerType: ["mouse", "touch", "pen"].includes(stroke.pointerType) ? stroke.pointerType : "mouse",
     points,
   };
+  if (stroke.tool === "image" && typeof stroke.src === "string" && /^data:image\/(?:png|jpe?g|webp|gif);base64,/i.test(stroke.src)) {
+    sanitized.src = stroke.src.slice(0, 12 * 1024 * 1024);
+  } else if (stroke.tool === "image") {
+    return null;
+  }
   const widthScale = Number(stroke.widthScale);
   if (Number.isFinite(widthScale)) sanitized.widthScale = Math.min(400, Math.max(.001, widthScale));
   const renderWidth = Number(stroke.renderWidth);

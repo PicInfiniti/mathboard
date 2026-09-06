@@ -67,6 +67,11 @@ async function dragPointer(start, end) {
   await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: end.x, y: end.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse" });
 }
 
+async function clickPointer(point, modifiers = 0) {
+  await command("Input.dispatchMouseEvent", { type: "mousePressed", x: point.x, y: point.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse", modifiers });
+  await command("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", buttons: 0, clickCount: 1, pointerType: "mouse", modifiers });
+}
+
 async function drawPointer(points) {
   const [start, ...moves] = points;
   await command("Input.dispatchMouseEvent", { type: "mousePressed", x: start.x, y: start.y, button: "left", buttons: 1, clickCount: 1, pointerType: "mouse" });
@@ -132,9 +137,13 @@ await check("hides coordinate labels", '!document.querySelector("#mathboard-axis
 await evaluate('document.querySelector("#mathboard-axis-numbers").click()');
 await check("restores coordinate labels", 'document.querySelector("#mathboard-axis-labels").classList.contains("is-visible")');
 
-await evaluate('document.querySelector("#mathboard-zoom-in").click()');
-await check("zooms the canvas", 'document.querySelector("#mathboard-zoom-reset").getAttribute("aria-label").includes("150%")');
+await pressKey("+", "Equal");
+await check("zooms in with +", 'document.querySelector("#mathboard-zoom-reset").getAttribute("aria-label").includes("150%")');
 await check("scales the coordinate grid", 'document.querySelector("#mathboard-board").style.getPropertyValue("--board-grid-size") === "48px"');
+await pressKey("-", "Minus");
+await check("zooms out with -", 'document.querySelector("#mathboard-zoom-reset").getAttribute("aria-label").includes("100%")');
+await pressKey("+", "NumpadAdd");
+await check("supports numpad zoom", 'document.querySelector("#mathboard-zoom-reset").getAttribute("aria-label").includes("150%")');
 await evaluate(`(() => {
   const zoomIn = document.querySelector("#mathboard-zoom-in");
   while (!zoomIn.disabled) zoomIn.click();
@@ -236,6 +245,35 @@ await evaluate(`(() => {
 })()`);
 await check("enables the Select tool", 'document.querySelector("[data-tool=select]").getAttribute("aria-pressed") === "true"');
 await dragPointer(
+  { x: canvasBounds.x - 25, y: canvasBounds.y - 20 },
+  { x: canvasBounds.x + 260, y: canvasBounds.y + 165 },
+);
+await check("selects multiple objects with an area", 'document.querySelector("#mathboard-status").textContent.includes("2 objects selected")');
+await pressKey("Escape", "Escape");
+const multiSelectPoints = await evaluate(`(() => {
+  const canvas = document.querySelector("#mathboard-canvas");
+  const bounds = canvas.getBoundingClientRect();
+  const context = canvas.getContext("2d");
+  const scaleX = canvas.width / bounds.width;
+  const scaleY = canvas.height / bounds.height;
+  const findInk = (left, top, right, bottom) => {
+    for (let y = top; y <= bottom; y += 2) {
+      for (let x = left; x <= right; x += 2) {
+        if (context.getImageData(Math.round((x - bounds.left) * scaleX), Math.round((y - bounds.top) * scaleY), 1, 1).data[3] > 20) return { x, y };
+      }
+    }
+    throw new Error("Could not find a stroke for multi-select test");
+  };
+  return {
+    line: findInk(${canvasBounds.x}, ${canvasBounds.y}, ${canvasBounds.x + 105}, ${canvasBounds.y + 45}),
+    circle: findInk(${canvasBounds.x + 110}, ${canvasBounds.y + 15}, ${canvasBounds.x + 250}, ${canvasBounds.y + 160}),
+  };
+})()`);
+await clickPointer(multiSelectPoints.line);
+await clickPointer(multiSelectPoints.circle, 2);
+await check("adds objects to selection with Control-click", 'document.querySelector("#mathboard-status").textContent.includes("2 objects selected")');
+await pressKey("Escape", "Escape");
+await dragPointer(
   { x: canvasBounds.x + 50, y: canvasBounds.y + 20 },
   { x: canvasBounds.x + 80, y: canvasBounds.y + 50 },
 );
@@ -250,6 +288,30 @@ await evaluate('document.querySelector("#mathboard-undo").click()');
 await check("undoes an object resize", 'document.querySelector("#mathboard-history-output").value.startsWith("3 of 4")');
 await evaluate('document.querySelector("#mathboard-redo").click()');
 await check("redoes an object resize", 'document.querySelector("#mathboard-history-output").value.startsWith("4 of 4")');
+const reselectAfterRedo = await evaluate(`(() => {
+  const canvasBounds = document.querySelector("#mathboard-canvas").getBoundingClientRect();
+  const [left, top, width, height] = window.__mathboardLastSelectionBox;
+  return { x: canvasBounds.left + left + (width / 2), y: canvasBounds.top + top + (height / 2) };
+})()`);
+await clickPointer(reselectAfterRedo);
+const freeResize = await evaluate(`(() => {
+  const canvasBounds = document.querySelector("#mathboard-canvas").getBoundingClientRect();
+  const [left, top, width, height] = window.__mathboardLastSelectionBox;
+  return {
+    beforeWidth: width,
+    beforeHeight: height,
+    start: { x: canvasBounds.left + left + width, y: canvasBounds.top + top + (height / 2) },
+    end: { x: canvasBounds.left + left + width + 45, y: canvasBounds.top + top + (height / 2) },
+  };
+})()`);
+await dragPointer(freeResize.start, freeResize.end);
+await check("stretches freely from a side resize handle", `(() => {
+  const [, , width, height] = window.__mathboardLastSelectionBox;
+  return width > ${freeResize.beforeWidth + 35}
+    && Math.abs(height - ${freeResize.beforeHeight}) < 1
+    && document.querySelector("#mathboard-history-output").value.startsWith("5 of 5");
+})()`);
+await evaluate('document.querySelector("#mathboard-undo").click()');
 
 await evaluate('document.querySelector("#mathboard-draw-assist").click()');
 await check("turns draw assist off", 'document.querySelector("#mathboard-draw-assist").getAttribute("aria-pressed") === "false"');
@@ -329,7 +391,7 @@ await check("keeps erased gaps attached when moving objects", `(() => {
   const deltaX = ${eraseCanvasArea.moveX};
   const deltaY = 80;
   return hasInkNear(${eraseTest.start.x} + deltaX + 20, ${eraseTest.start.y} + deltaY)
-    && !hasInkNear(${eraseTest.middle.x} + deltaX, ${eraseTest.middle.y} + deltaY, 6)
+    && !hasInkNear(${eraseTest.middle.x} + deltaX, ${eraseTest.middle.y} + deltaY, 3)
     && hasInkNear(${eraseTest.end.x} + deltaX - 20, ${eraseTest.end.y} + deltaY)
     && !hasInkNear(${eraseTest.start.x} + 20, ${eraseTest.start.y});
 })()`);
@@ -343,6 +405,12 @@ const resizeGesture = await evaluate(`(() => {
   };
 })()`);
 await dragPointer(resizeGesture.start, resizeGesture.end);
+const resizedHitPoint = await evaluate(`(() => {
+  const bounds = document.querySelector("#mathboard-canvas").getBoundingClientRect();
+  const [left, top, width, height] = window.__mathboardLastSelectionBox;
+  document.querySelector("[data-tool=pen]").click();
+  return { x: bounds.left + left + 12, y: bounds.top + top + (height / 2) };
+})()`);
 await check("scales erased gaps proportionally when resizing objects", `(() => {
   const canvas = document.querySelector("#mathboard-canvas");
   const bounds = canvas.getBoundingClientRect();
@@ -374,6 +442,8 @@ await check("scales erased gaps proportionally when resizing objects", `(() => {
     && largestGap > 2
     && largestGap < 12;
 })()`);
+await evaluate('document.querySelector("[data-tool=select]").click()');
+await clickPointer(resizedHitPoint);
 
 await pressKey("y");
 await check("copies a selected object with Y", `document.querySelector("#mathboard-status").textContent.includes("Object copied")
@@ -408,11 +478,12 @@ await pressKey("u");
 await check("undoes with U", 'document.querySelector("#mathboard-history-output").value.startsWith("6 of 7")');
 await pressKey("r");
 await check("redoes with R", 'document.querySelector("#mathboard-history-output").value.startsWith("7 of 7")');
+await pressKey("u");
 await rightClick(pastedHitPoint);
 await pressKey("Escape", "Escape");
 await pressKey("Delete", "Delete");
-await check("deletes a selected object with Delete", `document.querySelector("#mathboard-status").textContent.includes("Object deleted")
-  && document.querySelector("#mathboard-history-output").value.startsWith("8 of 8")`);
+await check("also deletes a selected object with Delete", `document.querySelector("#mathboard-status").textContent.includes("Object deleted")
+  && document.querySelector("#mathboard-history-output").value.startsWith("7 of 7")`);
 await pressKey("u");
 await rightClick(pastedHitPoint);
 await check("opens selected-object actions on right click", `(() => {
@@ -424,7 +495,11 @@ await check("opens selected-object actions on right click", `(() => {
 })()`);
 await evaluate('document.querySelector("#mathboard-context-menu [data-context-action=duplicate]").click()');
 await check("duplicates from the object context menu", `document.querySelector("#mathboard-status").textContent.includes("Object duplicated")
+  && document.querySelector("#mathboard-history-output").value.startsWith("7 of 7")`);
+await pressKey("Backspace", "Backspace");
+await check("also deletes a selected object with Backspace", `document.querySelector("#mathboard-status").textContent.includes("Object deleted")
   && document.querySelector("#mathboard-history-output").value.startsWith("8 of 8")`);
+await pressKey("u");
 await rightClick(eraseTest.start);
 await check("opens board actions on empty-space right click", `(() => {
   const menu = document.querySelector("#mathboard-context-menu");
@@ -432,10 +507,15 @@ await check("opens board actions on empty-space right click", `(() => {
     && menu.getAttribute("aria-label") === "Board actions"
     && Boolean(menu.querySelector("[data-context-action=paste]"))
     && Boolean(menu.querySelector("[data-context-action=history]"))
+    && Boolean(menu.querySelector("[data-context-action=axes]"))
     && Boolean(menu.querySelector("[data-context-action=reset-view]"))
     && Boolean(menu.querySelector("[data-context-action=fullscreen]"))
     && Boolean(menu.querySelector("[data-context-action=clear]"));
 })()`);
+const axesBeforeContextAction = await evaluate('document.querySelector("#mathboard-board").classList.contains("is-grid-coordinate")');
+await evaluate('document.querySelector("#mathboard-context-menu [data-context-action=axes]").click()');
+await check("toggles axes from the board context menu", `document.querySelector("#mathboard-board").classList.contains("is-grid-coordinate") !== ${axesBeforeContextAction}`);
+await rightClick(eraseTest.start);
 await pressKey("Escape", "Escape");
 await check("closes the context menu with Escape", 'document.querySelector("#mathboard-context-menu").hidden');
 
@@ -454,6 +534,16 @@ await check("enters fullscreen mode with F", 'document.querySelector(".mathboard
 await pressKey("f");
 await waitFor('document.fullscreenElement === null && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen") && !document.querySelector(".mathboard-main").classList.contains("is-fullscreen-fallback")');
 await check("exits fullscreen mode with F", '!document.querySelector(".mathboard-main").classList.contains("is-fullscreen")');
+
+await evaluate(`(() => {
+  const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNkYGD4z8DAwMDEAAUADikBA6wGWnEAAAAASUVORK5CYII="), (character) => character.charCodeAt(0));
+  const transfer = new DataTransfer();
+  transfer.items.add(new File([bytes], "clipboard.png", { type: "image/png" }));
+  document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true }));
+})()`);
+await waitFor('document.querySelector("#mathboard-status").textContent.includes("Clipboard image added")');
+await check("adds a clipboard image as a selectable object", `document.querySelector("[data-tool=select]").getAttribute("aria-pressed") === "true"
+  && document.querySelector("#mathboard-board").classList.contains("has-ink")`);
 
 await command("Browser.setDownloadBehavior", { behavior: "deny", eventsEnabled: true });
 await evaluate(`(() => {

@@ -191,6 +191,14 @@
     background: rgba(255, 253, 248, .08)
     font-size: .85rem
     font-weight: 700
+    cursor: pointer
+
+    &:hover
+      background: rgba(255, 253, 248, .14)
+
+    &:focus-visible
+      outline: 2px solid var(--gold)
+      outline-offset: 2px
 
 .mathboard-size
   width: 100%
@@ -366,6 +374,17 @@
     background: rgba(255, 253, 248, .08)
     color: var(--white)
     font-size: .85rem
+    cursor: pointer
+
+    &:hover
+      background: rgba(255, 253, 248, .14)
+
+    &:focus-visible
+      outline: 2px solid var(--green)
+      outline-offset: 2px
+
+    &[aria-disabled='true']
+      cursor: not-allowed
 
 .mathboard-history
   margin-top: auto

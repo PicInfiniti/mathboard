@@ -105,6 +105,8 @@ await check("initializes the canvas", 'document.querySelector("#mathboard-canvas
 await evaluate('document.querySelector("[data-tool=highlighter]").click()');
 await check("switches drawing tools", 'document.querySelector("[data-tool=highlighter]").getAttribute("aria-pressed") === "true"');
 await check("updates the size control", 'document.querySelector("#mathboard-size-label").textContent === "Highlighter size"');
+await evaluate('document.querySelector("#mathboard-size-output").click()');
+await check("increments tool size from its number badge", 'document.querySelector("#mathboard-size").value === "6" && document.querySelector("#mathboard-size-output").value === "6"');
 
 await evaluate('document.querySelector("[data-panel-tab=canvas]").click(); document.querySelector("[data-grid=coordinate]").click()');
 await check("switches canvas backgrounds", 'document.querySelector("#mathboard-board").classList.contains("is-grid-coordinate")');
@@ -132,6 +134,10 @@ await check("updates coordinate label size", `(() => {
   return document.querySelector("#mathboard-board").style.getPropertyValue("--axis-label-size") === "20px"
     && getComputedStyle(label).fontSize === "20px";
 })()`);
+await evaluate('document.querySelector("#mathboard-axis-size-output").click()');
+await check("increments number size from its number badge", `document.querySelector("#mathboard-axis-size").value === "21"
+  && document.querySelector("#mathboard-axis-size-output").value === "21"
+  && document.querySelector("#mathboard-board").style.getPropertyValue("--axis-label-size") === "21px"`);
 await evaluate('document.querySelector("#mathboard-axis-numbers").click()');
 await check("hides coordinate labels", '!document.querySelector("#mathboard-axis-labels").classList.contains("is-visible")');
 await evaluate('document.querySelector("#mathboard-axis-numbers").click()');

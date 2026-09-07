@@ -601,6 +601,7 @@ function syncControls() {
   axisSizeInput.value = state.axisFontSize;
   axisSizeOutput.value = state.axisFontSize;
   axisSizeInput.disabled = state.grid !== "coordinate" || !state.axisNumbers;
+  axisSizeOutput.setAttribute("aria-disabled", String(axisSizeInput.disabled));
   canvas.classList.toggle("is-erasing", state.tool === "eraser" || activeStroke?.tool === "eraser");
   canvas.classList.toggle("is-panning", state.tool === "hand");
   canvas.classList.toggle("is-panning-active", Boolean(activePan));
@@ -2041,6 +2042,28 @@ axisSizeInput.addEventListener("input", () => {
   syncControls();
   saveState();
 });
+
+function incrementSlider(input) {
+  if (input.disabled) return;
+  const maximum = Number(input.max);
+  const step = Number(input.step) || 1;
+  const nextValue = Math.min(maximum, Number(input.value) + step);
+  if (nextValue === Number(input.value)) return;
+  input.value = String(nextValue);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function bindSliderOutputIncrement(output, input) {
+  output.addEventListener("click", () => incrementSlider(input));
+  output.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    incrementSlider(input);
+  });
+}
+
+bindSliderOutputIncrement(sizeOutput, sizeInput);
+bindSliderOutputIncrement(axisSizeOutput, axisSizeInput);
 
 sizeInput.addEventListener("input", () => {
   const activeSizeTool = sizeControlTool();

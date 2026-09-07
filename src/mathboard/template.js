@@ -53,7 +53,7 @@ export function mathboardTemplate(baseUrl) {
           <label id="mathboard-size-label" for="mathboard-size">Pen size</label>
           <div class="mathboard-size-row">
             <input class="mathboard-size" id="mathboard-size" type="range" min="1" max="30" value="5" />
-            <output for="mathboard-size" id="mathboard-size-output">5</output>
+            <output for="mathboard-size" id="mathboard-size-output" role="button" tabindex="0" aria-label="Increase tool size by 1" title="Click to increase by 1">5</output>
           </div>
           <button class="mathboard-smoothing" id="mathboard-smoothing" type="button" aria-pressed="true">
             <span><strong>Smooth curves</strong><small>Round out pen movement</small></span>
@@ -80,7 +80,7 @@ export function mathboardTemplate(baseUrl) {
             <span>Number size</span>
             <span class="mathboard-axis-size__control">
               <input id="mathboard-axis-size" type="range" min="12" max="30" value="13" disabled />
-              <output id="mathboard-axis-size-output" for="mathboard-axis-size">13</output>
+              <output id="mathboard-axis-size-output" for="mathboard-axis-size" role="button" tabindex="0" aria-label="Increase number size by 1" title="Click to increase by 1">13</output>
             </span>
           </label>
         </fieldset>
